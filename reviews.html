@@ -55,15 +55,25 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
     <script src="https://cdn.jsdelivr.net/npm/aos@2.3.4/dist/aos.js"></script>
-    <script>
-      document.addEventListener('DOMContentLoaded', () => {
-        // Load reviews from the same admin storage used in app.js
+    <script type="module">
+      import { db } from './firebase-init.js';
+      import { collection, getDocs, query, where } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+
+      document.addEventListener('DOMContentLoaded', async () => {
+        const container = document.getElementById('reviews-grid');
+        if (!container) return;
+
         try {
-          const adminState = JSON.parse(localStorage.getItem('almasry-admin-data') || 'null');
-          const reviews = Array.isArray(adminState?.reviews) ? adminState.reviews : [];
-          const approved = reviews.filter((r) => r.approved);
-          const container = document.getElementById('reviews-grid');
-          if (!container) return;
+          const q = query(collection(db, 'reviews'), where('approved', '==', true));
+          const snap = await getDocs(q);
+          const approved = [];
+          snap.forEach((d) => approved.push({ id: d.id, ...d.data() }));
+
+          approved.sort((a, b) => {
+            const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            return tb - ta;
+          });
 
           if (!approved.length) {
             container.innerHTML = '<div class="col-12 text-center py-5"><p class="text-muted">لا توجد آراء معتمدة حالياً.</p></div>';
@@ -92,9 +102,10 @@
           if (window.AOS && typeof AOS.refreshHard === 'function') AOS.refreshHard();
         } catch (e) {
           console.warn('Unable to render reviews', e);
+          container.innerHTML = '<div class="col-12 text-center py-5"><p class="text-muted">تعذر تحميل الآراء.</p></div>';
         }
       });
     </script>
-    <script src="app.js"></script>
+    <script type="module" src="app.js"></script>
   </body>
 </html>

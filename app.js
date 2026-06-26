@@ -1,178 +1,156 @@
-const adminStorageKey = 'almasry-admin-data';
-const defaultProducts = [
-  {
-    id: 1,
-    name: 'حلويات المصري الخاصة',
-    category: 'شرقية',
-    price: 180,
-    oldPrice: 220,
-    rating: 4.9,
-    badge: 'الأكثر طلباً',
-    images: ['https://images.unsplash.com/photo-1551024601-bec78aea704b?auto=format&fit=crop&w=900&q=80', 'https://images.unsplash.com/photo-1563729784474-d77dbb933a9e?auto=format&fit=crop&w=900&q=80'],
-    description: 'مزيج فاخر من الحلاوة الشرقية واللوز والكاكاو مع لمسة من الشوكولاتة.',
-    ingredients: ['لوز', 'سكر', 'ماء ورد', 'شوكولاتة', 'مكسرات'],
-    weight: '500 غ',
-    featured: true,
-    bestSeller: true
-  },
-  {
-    id: 2,
-    name: 'تورتة الزهور الذهبية',
-    category: 'تورتات',
-    price: 650,
-    oldPrice: 780,
-    rating: 5,
-    badge: 'حصري',
-    images: ['https://images.unsplash.com/photo-1551024601-bec78aea704b?auto=format&fit=crop&w=900&q=80', 'https://images.unsplash.com/photo-1464349095431-e9a21285b5f3?auto=format&fit=crop&w=900&q=80'],
-    description: 'تورتة أنيقة للاحتفالات مع طبقات من الكيك والكراميل والفاكهة.',
-    ingredients: ['كيك فانيليا', 'كريمة زبدة', 'فواكه', 'كراميل'],
-    weight: '2.5 كغ',
-    featured: true,
-    bestSeller: true
-  },
-  {
-    id: 3,
-    name: 'باقة الأعياد',
-    category: 'هدايا',
-    price: 420,
-    oldPrice: 480,
-    rating: 4.8,
-    badge: 'عرض',
-    images: ['https://images.unsplash.com/photo-1519869325930-281384150729?auto=format&fit=crop&w=900&q=80', 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=900&q=80'],
-    description: 'باقة مميزة من الحلويات وكوبونات هدايا لاحتفالاتك.',
-    ingredients: ['معجنات', 'بسكويت', 'شوكولاتة', 'تغليف فاخر'],
-    weight: '1.2 كغ',
-    featured: false
-  },
-  {
-    id: 4,
-    name: 'كيك الشوكولاتة الذهبي',
-    category: 'كيك',
-    price: 240,
-    oldPrice: 290,
-    rating: 4.7,
-    badge: 'جديد',
-    images: ['https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=900&q=80', 'https://images.unsplash.com/photo-1519869325930-281384150729?auto=format&fit=crop&w=900&q=80'],
-    description: 'كيك أسفنجي دافئ مع طبقة من الشوكولاتة الغنية.',
-    ingredients: ['دقيق', 'شوكولاتة', 'بيض', 'سكر', 'زبدة'],
-    weight: '800 غ',
-    featured: true,
-    bestSeller: false
-  },
-  {
-    id: 5,
-    name: 'جاتوه الفراولة',
-    category: 'جاتوه',
-    price: 300,
-    oldPrice: 350,
-    rating: 4.9,
-    badge: 'موسمي',
-    images: ['https://images.unsplash.com/photo-1488477181946-6428a0291777?auto=format&fit=crop&w=900&q=80', 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=900&q=80'],
-    description: 'جاتوه خفيف بنكهة الفراولة وكريمة مخفوقة.',
-    ingredients: ['فراولة', 'كريمة', 'ماء', 'سكر'],
-    weight: '1 كغ',
-    featured: false
-  },
-  {
-    id: 6,
-    name: 'عروض الورد واللوز',
-    category: 'عروض',
-    price: 360,
-    oldPrice: 420,
-    rating: 4.8,
-    badge: 'تخفيض 15%',
-    images: ['https://images.unsplash.com/photo-1571877227200-a0d98ea607e9?auto=format&fit=crop&w=900&q=80', 'https://images.unsplash.com/photo-1483695028939-5bb13f8648b0?auto=format&fit=crop&w=900&q=80'],
-    description: 'باقة احتفالية من المعجنات، اللوز، والفواكه.',
-    ingredients: ['لوز', 'ورد', 'معجنات', 'فواكه'],
-    weight: '1.5 كغ',
-    featured: false
-  }
-];
+import { db } from './firebase-init.js';
+import {
+  collection,
+  doc,
+  getDocs,
+  getDoc,
+  query,
+  where,
+  orderBy,
+  limit
+} from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
-function normalizeProduct(product) {
-  return {
-    ...product,
-    id: Number(product.id),
-    price: Number(product.price || 0),
-    oldPrice: Number(product.oldPrice || product.price || 0),
-    rating: Number(product.rating || 4.8),
-    badge: product.badge || 'مميز',
-    images: Array.isArray(product.images) && product.images.length ? product.images : ["https://images.unsplash.com/photo-1551024601-bec78aea704b?auto=format&fit=crop&w=900&q=80"],
-    description: product.description || 'منتج فاخر من متجر المصري.',
-    ingredients: Array.isArray(product.ingredients) ? product.ingredients : [],
-    weight: product.weight || '1 كغ',
-    featured: Boolean(product.featured),
-    bestSeller: Boolean(product.bestSeller)
-  };
-}
+// Firestore collections
+const PRODUCTS_COL = 'products';
+const OFFERS_COL = 'offers';
+const REVIEWS_COL = 'reviews';
+const SETTINGS_COL = 'settings';
 
-function loadProductsFromStorage() {
-  try {
-    const adminState = JSON.parse(localStorage.getItem(adminStorageKey) || 'null');
-    if (adminState && Array.isArray(adminState.products)) {
-      return adminState.products.map(normalizeProduct);
-    }
-  } catch (error) {
-    console.warn('Unable to load products from storage', error);
-  }
-  return defaultProducts.map(normalizeProduct);
-}
-
-function syncProductsFromStorage() {
-  products = loadProductsFromStorage();
-  initPage();
-}
+// =========================
+// Runtime state
+// =========================
+let products = [];
+let offers = [];
+let settings = null;
 
 const cartKey = 'almasry-cart';
-let products = loadProductsFromStorage();
-let offers = [];
 let cart = JSON.parse(localStorage.getItem(cartKey) || '[]');
+function saveCart() {
+  localStorage.setItem(cartKey, JSON.stringify(cart));
+}
+function formatPrice(value) {
+  return `${Number(value || 0).toLocaleString('ar-EG')} ج.م`;
+}
 
-function saveCart() { localStorage.setItem(cartKey, JSON.stringify(cart)); }
-function formatPrice(value) { return `${value.toLocaleString('ar-EG')} ج.م`; }
-
-function normalizeOffer(offer) {
+// =========================
+// Helpers
+// =========================
+function normalizeProduct(p) {
   return {
-    ...offer,
-    id: Number(offer.id || Date.now()),
-    title: offer.title || 'عرض مميز',
-    description: offer.description || 'عرض خاص من متجر المصري.',
-    discount: Number(offer.discount || 0),
-    price: Number(offer.price || 0),
-    showOnHome: Boolean(offer.showOnHome),
-    homeTitle: offer.homeTitle || offer.title || 'عرض مميز',
-    homeDescription: offer.homeDescription || offer.description || 'عرض خاص من متجر المصري.',
-    buttonText: offer.buttonText || 'عرض المزيد',
-    buttonLink: offer.buttonLink || 'offers.html',
-    images: Array.isArray(offer.images) ? offer.images : []
+    ...p,
+    id: Number(p.id),
+    price: Number(p.price || 0),
+    oldPrice: Number(p.oldPrice || p.price || 0),
+    rating: Number(p.rating || 4.8),
+    badge: p.badge || 'مميز',
+    images: Array.isArray(p.images) && p.images.length ? p.images : ["https://images.unsplash.com/photo-1551024601-bec78aea704b?auto=format&fit=crop&w=900&q=80"],
+    description: p.description || 'منتج فاخر من متجر المصري.',
+    ingredients: Array.isArray(p.ingredients) ? p.ingredients : [],
+    weight: p.weight || '1 كغ',
+    featured: Boolean(p.featured),
+    bestSeller: Boolean(p.bestSeller)
   };
 }
 
-function loadOffersFromStorage() {
-  try {
-    const adminState = JSON.parse(localStorage.getItem(adminStorageKey) || 'null');
-    if (adminState && Array.isArray(adminState.offers)) {
-      return adminState.offers.map(normalizeOffer);
-    }
-  } catch (error) {
-    console.warn('Unable to load offers from storage', error);
-  }
-
-  return [
-    { id: 1, title: 'عرض الصيف', description: 'خصم 15% على الباقات والمنتجات المختارة.', discount: 15, price: 320, showOnHome: true, homeTitle: 'عرض الصيف', homeDescription: 'خصم 15% على الباقات والمنتجات المختارة.', buttonText: 'استكشف العرض', buttonLink: 'offers.html' },
-    { id: 2, title: 'عرض العيد', description: 'تورتات مخصصة مع باقات هدايا فاخرة.', discount: 20, price: 450, showOnHome: true, homeTitle: 'تورتات العيد', homeDescription: 'تورتات مخصصة مع باقات هدايا فاخرة.', buttonText: 'عرض المزيد', buttonLink: 'offers.html' },
-    { id: 3, title: 'عرض الهدية', description: 'خصومات خاصة على البوكس والهدايا الاحتفالية.', discount: 10, price: 250, showOnHome: false, homeTitle: 'عرض الهدية', homeDescription: 'خصومات خاصة على البوكس والهدايا الاحتفالية.', buttonText: 'اقرأ المزيد', buttonLink: 'offers.html' }
-  ].map(normalizeOffer);
+function normalizeOffer(o) {
+  return {
+    ...o,
+    id: Number(o.id),
+    title: o.title || 'عرض مميز',
+    description: o.description || 'عرض خاص من متجر المصري.',
+    discount: Number(o.discount || 0),
+    price: Number(o.price || 0),
+    showOnHome: Boolean(o.showOnHome),
+    homeTitle: o.homeTitle || o.title || 'عرض مميز',
+    homeDescription: o.homeDescription || o.description || 'عرض خاص من متجر المصري.',
+    buttonText: o.buttonText || 'عرض المزيد',
+    buttonLink: o.buttonLink || 'offers.html',
+    images: Array.isArray(o.images) ? o.images : []
+  };
 }
 
-function syncSiteData() {
-  products = loadProductsFromStorage();
-  offers = loadOffersFromStorage();
+function getCartItems() {
+  return cart.map((entry) => {
+    if (entry.type === 'offer') {
+      return { type: 'offer', item: entry, qty: entry.qty };
+    }
 
-  // تحديث الصفحة فقط بما هو موجود فيها لتفادي مشاكل التهيئة المتكررة
+    const product = products.find((p) => p.id === Number(entry.id));
+    return product ? { type: 'product', item: product, qty: entry.qty } : null;
+  }).filter(Boolean);
+}
+
+function getProductById(id) {
+  return products.find((product) => product.id === Number(id));
+}
+
+// =========================
+// Firestore loading
+// =========================
+async function loadCollectionAsArray(colName) {
+  const snap = await getDocs(collection(db, colName));
+  const items = [];
+  snap.forEach((d) => items.push({ id: d.id, ...d.data() }));
+  return items;
+}
+
+async function loadProducts() {
+  const items = await loadCollectionAsArray(PRODUCTS_COL);
+  // docs id is productId; allow either id field or doc id
+  const normalized = items.map((p) => normalizeProduct({ ...p, id: Number(p.id || p.productId || p.docId) || Number(p.id) }));
+  return normalized;
+}
+
+async function loadOffers() {
+  const items = await loadCollectionAsArray(OFFERS_COL);
+  const normalized = items.map((o) => normalizeOffer({ ...o, id: Number(o.id || o.offerId || o.docId) || Number(o.id) }));
+  return normalized;
+}
+
+async function loadSettings() {
+  // settings doc: either `main` or first one
+  const settingsCol = collection(db, SETTINGS_COL);
+  const snap = await getDocs(settingsCol);
+  if (snap.empty) return null;
+  const first = snap.docs[0];
+  return { id: first.id, ...first.data() };
+}
+
+async function loadApprovedReviews() {
+  // Only approved=true
+  const q = query(
+    collection(db, REVIEWS_COL),
+    where('approved', '==', true)
+  );
+  const snap = await getDocs(q);
+  const items = [];
+  snap.forEach((d) => items.push({ id: d.id, ...d.data() }));
+  // newest first
+  items.sort((a, b) => {
+    const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return tb - ta;
+  });
+  return items;
+}
+
+async function syncFirestore() {
+  // keep UI responsive: fetch in parallel
+  const [p, o, s, r] = await Promise.all([
+    loadProducts().catch(() => []),
+    loadOffers().catch(() => []),
+    loadSettings().catch(() => null),
+    loadApprovedReviews().catch(() => [])
+  ]);
+
+  products = p;
+  offers = o;
+  settings = s;
+
+  // render
   if (document.getElementById('featured-products')) initHomePage();
   if (document.getElementById('homepage-offers')) renderHomeOffers();
-  if (document.getElementById('home-reviews-grid')) renderHomeReviews();
+  if (document.getElementById('home-reviews-grid')) renderHomeReviews(r);
 
   if (document.getElementById('offers-grid')) initOffersPage();
   if (document.getElementById('products-grid')) initProductsPage();
@@ -181,12 +159,16 @@ function syncSiteData() {
   if (document.getElementById('product-detail')) initProductDetail();
 }
 
-
+// =========================
+// Cart actions
+// =========================
 function addToCart(productId, qty = 1) {
   const item = cart.find((entry) => entry.id === productId && entry.type !== 'offer');
-  if (item) item.qty += qty; else cart.push({ id: productId, type: 'product', qty });
+  if (item) item.qty += qty;
+  else cart.push({ id: productId, type: 'product', qty });
   saveCart();
   Swal.fire({ title: 'تمت الإضافة!', text: 'تمت إضافة المنتج إلى السلة بنجاح', icon: 'success', confirmButtonText: 'حسناً' });
+  initCartPage();
 }
 
 function addOfferToCart(offerId, qty = 1) {
@@ -195,26 +177,75 @@ function addOfferToCart(offerId, qty = 1) {
 
   const cartId = `offer-${offer.id}`;
   const item = cart.find((entry) => entry.id === cartId && entry.type === 'offer');
-  if (item) item.qty += qty; else cart.push({ id: cartId, type: 'offer', qty, title: offer.title, description: offer.description, discount: Number(offer.discount || 0) });
+  if (item) item.qty += qty;
+  else cart.push({ id: cartId, type: 'offer', qty, title: offer.title, description: offer.description, discount: Number(offer.discount || 0) });
   saveCart();
   Swal.fire({ title: 'تمت الإضافة!', text: `تمت إضافة العرض "${offer.title}" إلى السلة`, icon: 'success', confirmButtonText: 'حسناً' });
+  initCartPage();
 }
 
-function getProductById(id) { return products.find((product) => product.id === Number(id)); }
-function getCartItems() {
-  return cart.map((entry) => {
-    if (entry.type === 'offer') {
-      return { type: 'offer', item: entry, qty: entry.qty };
-    }
-
-    const product = getProductById(entry.id);
-    return product ? { type: 'product', item: product, qty: entry.qty } : null;
-  }).filter(Boolean);
+function changeQty(productId, delta) {
+  cart = cart.map((entry) => entry.id === productId ? { ...entry, qty: Math.max(1, entry.qty + delta) } : entry)
+    .filter((entry) => entry.qty > 0);
+  saveCart();
+  initCartPage();
 }
 
+function removeFromCart(productId) {
+  cart = cart.filter((entry) => entry.id !== productId);
+  saveCart();
+  initCartPage();
+}
+
+function submitOrder() {
+  const items = getCartItems();
+  const total = items.reduce((sum, entry) => sum + (entry.type === 'offer' ? 0 : entry.item.price * entry.qty), 0);
+
+  const orderRef = `MASRY-${Date.now()}`;
+  const order = {
+    orderRef,
+    items: items.map((entry) => ({
+      type: entry.type,
+      id: entry.type === 'offer' ? `offer-${entry.item.id}` : entry.item.id,
+      title: entry.type === 'offer' ? entry.item.title : entry.item.name,
+      qty: entry.qty,
+      productId: entry.type === 'product' ? entry.item.id : null
+    })),
+    total,
+    createdAt: new Date().toISOString(),
+    reviewed: false
+  };
+
+  // Pending Orders currently still local (your earlier design)
+  // You can migrate to Firestore later.
+  try {
+    const pendingKey = 'almasry-orders-pending';
+    const pending = JSON.parse(localStorage.getItem(pendingKey) || '[]');
+    pending.push(order);
+    localStorage.setItem(pendingKey, JSON.stringify(pending));
+  } catch (e) {
+    console.warn('Unable to save pending orders', e);
+  }
+
+  const message = `مرحباً، أريد طلباً من متجر المصري (مرجع الطلب: ${orderRef}):\n${items
+    .map((entry) =>
+      entry.type === 'offer'
+        ? `- العرض: ${entry.item.title} × ${entry.qty} (خصم ${entry.item.discount}%)`
+        : `- ${entry.item.name} × ${entry.qty}`
+    )
+    .join('\n')}\nالإجمالي: ${formatPrice(total)}`;
+
+  const encoded = encodeURIComponent(message);
+  window.open(`https://wa.me/201011001128?text=${encoded}`, '_blank');
+}
+
+// =========================
+// Render pages
+// =========================
 function renderProductCards(container, limit = null) {
   if (!container) return;
   const items = limit ? products.filter((p) => p.featured).slice(0, limit) : products;
+
   container.innerHTML = items.map((product) => `
     <div class="col-lg-4 col-md-6 mb-4">
       <div class="product-card h-100">
@@ -268,79 +299,18 @@ function renderBestSellers() {
   `).join('');
 }
 
-
-function initOffersPage() {
-  const container = document.getElementById('offers-grid');
-  if (!container) return;
-
-  container.innerHTML = offers.map((offer) => {
-    const mainImg = offer?.images?.[0];
-    return `
-      <div class="col-lg-4" data-aos="fade-up">
-        <div class="offer-card p-4 h-100">
-          ${mainImg ? `<img src="${mainImg}" alt="${offer.title}" class="offer-image" />` : ''}
-          <h4 class="mt-2">${offer.title}</h4>
-          <p>${offer.description}</p>
-          <div class="fw-bold text-gold">خصم ${offer.discount}%</div>
-          ${offer.price ? `<div class="fw-bold mt-2">${formatPrice(offer.price)}</div>` : ''}
-          <button class="btn btn-primary-custom mt-3" onclick="addOfferToCart(${offer.id})">إضافة إلى السلة</button>
-        </div>
-      </div>
-    `;
-  }).join('');
+function initHomePage() {
+  renderProductCards(document.getElementById('featured-products'), 3);
+  renderBestSellers();
+  renderHomeOffers();
+  // reviews handled after fetch (syncFirestore)
 }
-
-
-function renderHomeReviews() {
-  const container = document.getElementById('home-reviews-grid');
-  if (!container) return;
-
-  let reviews = [];
-  try {
-    const adminState = JSON.parse(localStorage.getItem(adminStorageKey) || 'null');
-    reviews = Array.isArray(adminState?.reviews) ? adminState.reviews : [];
-  } catch (error) {
-    reviews = [];
-  }
-
-  const approved = reviews.filter((r) => r.approved);
-
-  if (!approved.length) {
-    container.innerHTML = '<div class="col-12 text-center py-4"><p class="text-muted">لا توجد آراء معتمدة حالياً.</p></div>';
-    return;
-  }
-
-  const homeReviews = approved.slice(0, 3);
-
-  container.innerHTML = homeReviews
-    .map((review, index) => {
-      const productLabel = review.productName ? `عن المنتج: ${review.productName}` : 'عن المنتج';
-      const orderLabel = review.orderRef ? `مرجع الطلب: ${review.orderRef}` : '';
-      const dateLabel = review.createdAt ? `تاريخ التقييم: ${new Date(review.createdAt).toLocaleDateString('ar-EG')}` : '';
-
-      return `
-        <div class="col-lg-4" data-aos="fade-up"${index === 1 ? ' data-aos-delay="100"' : index === 2 ? ' data-aos-delay="200"' : ''}>
-          <div class="review-card p-4">
-            <div class="text-warning mb-3">★★★★★</div>
-            <p>“${(review.text || '').replaceAll('"', '"')}”</p>
-            <strong>— ${(review.name || '').replaceAll('"', '"')}</strong>
-            <div class="mt-2 small text-muted">${productLabel}</div>
-            ${orderLabel ? `<div class="small text-muted">${orderLabel}</div>` : ''}
-            ${dateLabel ? `<div class="small text-muted">${dateLabel}</div>` : ''}
-          </div>
-        </div>
-      `;
-    })
-    .join('');
-}
-
 
 function renderHomeOffers() {
   const container = document.getElementById('homepage-offers');
   if (!container) return;
 
   const homeOffers = offers.filter((offer) => offer.showOnHome).slice(0, 2);
-
   if (!homeOffers.length) {
     container.innerHTML = '<div class="col-12 text-center py-4"><p class="text-muted">لن تظهر أي بطاقات حتى تضيف عرضًا من لوحة الإدارة.</p></div>';
     return;
@@ -364,6 +334,56 @@ function renderHomeOffers() {
   }).join('');
 }
 
+function renderHomeReviews(reviews = []) {
+  const container = document.getElementById('home-reviews-grid');
+  if (!container) return;
+
+  const approved = reviews.filter((r) => r.approved);
+  if (!approved.length) {
+    container.innerHTML = '<div class="col-12 text-center py-4"><p class="text-muted">لا توجد آراء معتمدة حالياً.</p></div>';
+    return;
+  }
+
+  const homeReviews = approved.slice(0, 3);
+  container.innerHTML = homeReviews.map((review, index) => {
+    const productLabel = review.productName ? `عن المنتج: ${review.productName}` : 'عن المنتج';
+    const orderLabel = review.orderRef ? `مرجع الطلب: ${review.orderRef}` : '';
+    const dateLabel = review.createdAt ? `تاريخ التقييم: ${new Date(review.createdAt).toLocaleDateString('ar-EG')}` : '';
+
+    return `
+      <div class="col-lg-4" data-aos="fade-up"${index === 1 ? ' data-aos-delay="100"' : index === 2 ? ' data-aos-delay="200"' : ''}>
+        <div class="review-card p-4">
+          <div class="text-warning mb-3">★★★★★</div>
+          <p>“${(review.text || '').replaceAll('"', '"')}”</p>
+          <strong>— ${(review.name || '').replaceAll('"', '"')}</strong>
+          <div class="mt-2 small text-muted">${productLabel}</div>
+          ${orderLabel ? `<div class="small text-muted">${orderLabel}</div>` : ''}
+          ${dateLabel ? `<div class="small text-muted">${dateLabel}</div>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function initOffersPage() {
+  const container = document.getElementById('offers-grid');
+  if (!container) return;
+  container.innerHTML = offers.map((offer) => {
+    const mainImg = offer?.images?.[0];
+    return `
+      <div class="col-lg-4" data-aos="fade-up">
+        <div class="offer-card p-4 h-100">
+          ${mainImg ? `<img src="${mainImg}" alt="${offer.title}" class="offer-image" />` : ''}
+          <h4 class="mt-2">${offer.title}</h4>
+          <p>${offer.description}</p>
+          <div class="fw-bold text-gold">خصم ${offer.discount}%</div>
+          ${offer.price ? `<div class="fw-bold mt-2">${formatPrice(offer.price)}</div>` : ''}
+          <button class="btn btn-primary-custom mt-3" onclick="addOfferToCart(${offer.id})">إضافة إلى السلة</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
 
 function initProductsPage() {
   const grid = document.getElementById('products-grid');
@@ -371,6 +391,8 @@ function initProductsPage() {
   const searchInput = document.getElementById('search-input');
   const sortSelect = document.getElementById('sort-select');
   const pagination = document.getElementById('pagination');
+  if (!grid) return;
+
   let currentCategory = 'الكل';
   let currentPage = 1;
   const perPage = 6;
@@ -401,43 +423,42 @@ function initProductsPage() {
     const start = (currentPage - 1) * perPage;
     const pageItems = sorted.slice(start, start + perPage);
 
-    if (grid) {
-      if (!pageItems.length) {
-        grid.innerHTML = '<div class="col-12 text-center py-5"><h5>لا توجد منتجات تطابق التصفية الحالية</h5></div>';
-      } else {
-        grid.innerHTML = pageItems.map((product) => `
-          <div class="col-lg-4 col-md-6 mb-4">
-            <div class="product-card h-100">
-              <img src="${product.images[0]}" alt="${product.name}" class="w-100">
-              <div class="p-4">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                  <span class="badge badge-green">${product.badge}</span>
-                  <span class="text-warning">★ ${product.rating}</span>
+    if (!pageItems.length) {
+      grid.innerHTML = '<div class="col-12 text-center py-5"><h5>لا توجد منتجات تطابق التصفية الحالية</h5></div>';
+    } else {
+      grid.innerHTML = pageItems.map((product) => `
+        <div class="col-lg-4 col-md-6 mb-4">
+          <div class="product-card h-100">
+            <img src="${product.images[0]}" alt="${product.name}" class="w-100">
+            <div class="p-4">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="badge badge-green">${product.badge}</span>
+                <span class="text-warning">★ ${product.rating}</span>
+              </div>
+              <h5 class="fw-bold">${product.name}</h5>
+              <p class="text-muted small">${product.description}</p>
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                  <span class="price-current">${formatPrice(product.price)}</span>
+                  <div class="price-old small">${formatPrice(product.oldPrice)}</div>
                 </div>
-                <h5 class="fw-bold">${product.name}</h5>
-                <p class="text-muted small">${product.description}</p>
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                  <div>
-                    <span class="price-current">${formatPrice(product.price)}</span>
-                    <div class="price-old small">${formatPrice(product.oldPrice)}</div>
-                  </div>
-                  <span class="text-muted small">${product.category}</span>
-                </div>
-                <div class="d-flex gap-2">
-                  <a href="product-details.html?id=${product.id}" class="btn btn-outline-custom btn-sm flex-grow-1">التفاصيل</a>
-                  <button class="btn btn-primary-custom btn-sm flex-grow-1" onclick="addToCart(${product.id})">إضافة للسلة</button>
-                </div>
+                <span class="text-muted small">${product.category}</span>
+              </div>
+              <div class="d-flex gap-2">
+                <a href="product-details.html?id=${product.id}" class="btn btn-outline-custom btn-sm flex-grow-1">التفاصيل</a>
+                <button class="btn btn-primary-custom btn-sm flex-grow-1" onclick="addToCart(${product.id})">إضافة للسلة</button>
               </div>
             </div>
           </div>
-        `).join('');
-      }
+        </div>
+      `).join('');
     }
 
     if (pagination) {
       pagination.innerHTML = Array.from({ length: pages }, (_, i) => `
         <li class="page-item ${i + 1 === currentPage ? 'active' : ''}"><button class="page-link" data-page="${i + 1}">${i + 1}</button></li>
       `).join('');
+
       pagination.querySelectorAll('[data-page]').forEach((button) => {
         button.addEventListener('click', () => {
           currentPage = Number(button.dataset.page);
@@ -461,176 +482,17 @@ function initProductsPage() {
   applyFilters();
 }
 
-function initCartPage() {
-  const cartItemsContainer = document.getElementById('cart-items');
-  const cartSummary = document.getElementById('cart-summary');
-  if (!cartItemsContainer || !cartSummary) return;
-
-  function renderCart() {
-    const items = getCartItems();
-    if (!items.length) {
-cartItemsContainer.innerHTML = '<div class="col-12"><div class="alert alert-info">السلة فارغة حالياً</div></div>';
-      cartSummary.innerHTML = '<div class="summary-box"><h5>الإجمالي</h5><p class="mb-0">0 ج.م</p></div>';
-      return;
-    }
-
-    cartItemsContainer.innerHTML = items.map(({ type, item, qty }) => {
-      if (type === 'offer') {
-        return `
-          <div class="cart-item mb-3 p-3">
-            <div class="row align-items-center">
-              <div class="col-md-7">
-                <h6 class="fw-bold">العرض: ${item.title}</h6>
-                <p class="small text-muted mb-0">${item.description}</p>
-                <span class="badge badge-gold mt-2">خصم ${item.discount}%</span>
-              </div>
-              <div class="col-md-2">
-                <div class="quantity-control">
-                  <button onclick="changeQty('${item.id}', -1)">−</button>
-                  <span>${qty}</span>
-                  <button onclick="changeQty('${item.id}', 1)">+</button>
-                </div>
-              </div>
-              <div class="col-md-3 text-end">
-<div class="fw-bold">0 ج.م</div>
-                <button class="btn btn-link text-danger p-0" onclick="removeFromCart('${item.id}')">حذف</button>
-              </div>
-            </div>
-          </div>
-        `;
-      }
-
-      return `
-        <div class="cart-item mb-3 p-3">
-          <div class="row align-items-center">
-            <div class="col-md-3"><img src="${item.images[0]}" alt="${item.name}"></div>
-            <div class="col-md-5">
-              <h6 class="fw-bold">${item.name}</h6>
-              <p class="small text-muted mb-0">${item.description}</p>
-            </div>
-            <div class="col-md-2">
-              <div class="quantity-control">
-                <button onclick="changeQty(${item.id}, -1)">−</button>
-                <span>${qty}</span>
-                <button onclick="changeQty(${item.id}, 1)">+</button>
-              </div>
-            </div>
-            <div class="col-md-2 text-end">
-              <div class="fw-bold">${formatPrice(item.price * qty)}</div>
-              <button class="btn btn-link text-danger p-0" onclick="removeFromCart(${item.id})">حذف</button>
-            </div>
-          </div>
-        </div>
-      `;
-    }).join('');
-
-    const subtotal = items.reduce((sum, entry) => sum + (entry.type === 'offer' ? 0 : entry.item.price * entry.qty), 0);
-
-    // الخصم يكون بناءً على العروض/المنتجات داخل السلة.
-    // - عروض (type === 'offer') قيمتها مخزنة في entry.item.discount كنسبة مئوية.
-    // - على باقي المنتجات: لا يوجد خصم افتراضي إلا لو المنتج نفسه يحمل badge/y/oldPrice.
-    let discount = 0;
-
-    // 1) خصم عروض السلة (جمع/تجميع نسب)
-    const offerDiscountRateSum = items.reduce((sum, entry) => {
-      if (entry.type !== 'offer') return sum;
-      return sum + Number(entry.item.discount || 0);
-    }, 0);
-
-    // تحويل النسبة إلى قيمة خصم على subtotal. لو فيه أكثر من عرض، هنحسبهم كـ (rateSum) وليس تراكمي (compounding).
-    discount += subtotal * (offerDiscountRateSum / 100);
-
-    // 2) خصم المنتجات لو عندها oldPrice > price (فرق السعر كنقص)
-    discount += items.reduce((sum, entry) => {
-      if (entry.type !== 'product') return sum;
-      const p = entry.item;
-      const perUnitDiscount = Math.max(0, (Number(p.oldPrice || p.price) - Number(p.price || 0)));
-      return sum + perUnitDiscount * entry.qty;
-    }, 0);
-
-    // منع خصم أكبر من المجموع
-    discount = Math.min(discount, subtotal);
-
-    const total = subtotal - discount;
-    cartSummary.innerHTML = `
-      <div class="summary-box">
-        <h5>ملخص الطلب</h5>
-        <div class="d-flex justify-content-between mt-3"><span>المجموع الفرعي</span><span>${formatPrice(subtotal)}</span></div>
-        <div class="d-flex justify-content-between"><span>الخصم</span><span>${formatPrice(discount)}</span></div>
-        <hr>
-        <div class="d-flex justify-content-between fw-bold"><span>الإجمالي</span><span>${formatPrice(total)}</span></div>
-        <button class="btn btn-light w-100 mt-3" onclick="submitOrder()">إرسال الطلب عبر واتساب</button>
-      </div>
-    `;
-  }
-
-  renderCart();
-}
-
-function changeQty(productId, delta) {
-  cart = cart.map((entry) => entry.id === productId ? { ...entry, qty: Math.max(1, entry.qty + delta) } : entry).filter((entry) => entry.qty > 0);
-  saveCart();
-  initCartPage();
-}
-
-function removeFromCart(productId) {
-  cart = cart.filter((entry) => entry.id !== productId);
-  saveCart();
-  initCartPage();
-}
-
-function submitOrder() {
-  const items = getCartItems();
-  const total = items.reduce((sum, entry) => sum + (entry.type === 'offer' ? 0 : entry.item.price * entry.qty), 0);
-
-  // إنشاء مرجع طلب فريد وربطه بالتقييم لاحقاً
-  const orderRef = `MASRY-${Date.now()}`;
-  const order = {
-    orderRef,
-    items: items.map((entry) => ({
-      type: entry.type,
-      id: entry.type === 'offer' ? `offer-${entry.item.id}` : entry.item.id,
-      title: entry.type === 'offer' ? entry.item.title : entry.item.name,
-      qty: entry.qty,
-      productId: entry.type === 'product' ? entry.item.id : null
-    })),
-    total,
-    createdAt: new Date().toISOString(),
-    reviewed: false
-  };
-
-  try {
-    const pendingKey = 'almasry-orders-pending';
-    const pending = JSON.parse(localStorage.getItem(pendingKey) || '[]');
-    pending.push(order);
-    localStorage.setItem(pendingKey, JSON.stringify(pending));
-  } catch (e) {
-    console.warn('Unable to save pending orders', e);
-  }
-
-  const message = `مرحباً، أريد طلباً من متجر المصري (مرجع الطلب: ${orderRef}):\n${items
-    .map((entry) =>
-      entry.type === 'offer'
-        ? `- العرض: ${entry.item.title} × ${entry.qty} (خصم ${entry.item.discount}%)`
-        : `- ${entry.item.name} × ${entry.qty}`
-    )
-    .join('\n')}\nالإجمالي: ${formatPrice(total)}`;
-
-  const encoded = encodeURIComponent(message);
-  window.open(`https://wa.me/201011001128?text=${encoded}`, '_blank');
-
-  // لا نفرّغ السلة بعد إرسال الطلب عبر واتساب، لتظل محفوظة للعميل.
-  // حفظ الطلب يتم بالفعل داخل localStorage (almasry-orders-pending).
-}
-
-
-
 function initProductDetail() {
   const productId = new URLSearchParams(window.location.search).get('id');
   const detail = document.getElementById('product-detail');
   if (!detail || !productId) return;
+
   const product = getProductById(productId);
-  if (!product) { detail.innerHTML = '<div class="alert alert-danger">المنتج غير موجود</div>'; return; }
+  if (!product) {
+    detail.innerHTML = '<div class="alert alert-danger">المنتج غير موجود</div>';
+    return;
+  }
+
   detail.innerHTML = `
     <div class="row g-4">
       <div class="col-lg-6">
@@ -657,24 +519,107 @@ function initProductDetail() {
 }
 
 function changeMainImage(src) {
-  document.getElementById('mainImage').src = src;
+  const el = document.getElementById('mainImage');
+  if (el) el.src = src;
 }
 
-function initHomePage() {
-  renderProductCards(document.getElementById('featured-products'), 3);
-  renderBestSellers();
-  renderHomeOffers();
-  renderHomeReviews();
+function initCartPage() {
+  const cartItemsContainer = document.getElementById('cart-items');
+  const cartSummary = document.getElementById('cart-summary');
+  if (!cartItemsContainer || !cartSummary) return;
+
+  const items = getCartItems();
+  if (!items.length) {
+    cartItemsContainer.innerHTML = '<div class="col-12"><div class="alert alert-info">السلة فارغة حالياً</div></div>';
+    cartSummary.innerHTML = '<div class="summary-box"><h5>الإجمالي</h5><p class="mb-0">0 ج.م</p></div>';
+    return;
+  }
+
+  cartItemsContainer.innerHTML = items.map(({ type, item, qty }) => {
+    if (type === 'offer') {
+      return `
+        <div class="cart-item mb-3 p-3">
+          <div class="row align-items-center">
+            <div class="col-md-7">
+              <h6 class="fw-bold">العرض: ${item.title}</h6>
+              <p class="small text-muted mb-0">${item.description}</p>
+              <span class="badge badge-gold mt-2">خصم ${item.discount}%</span>
+            </div>
+            <div class="col-md-2">
+              <div class="quantity-control">
+                <button onclick="changeQty('${item.id}', -1)">−</button>
+                <span>${qty}</span>
+                <button onclick="changeQty('${item.id}', 1)">+</button>
+              </div>
+            </div>
+            <div class="col-md-3 text-end">
+              <div class="fw-bold">0 ج.م</div>
+              <button class="btn btn-link text-danger p-0" onclick="removeFromCart('${item.id}')">حذف</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="cart-item mb-3 p-3">
+        <div class="row align-items-center">
+          <div class="col-md-3"><img src="${item.images[0]}" alt="${item.name}"></div>
+          <div class="col-md-5">
+            <h6 class="fw-bold">${item.name}</h6>
+            <p class="small text-muted mb-0">${item.description}</p>
+          </div>
+          <div class="col-md-2">
+            <div class="quantity-control">
+              <button onclick="changeQty(${item.id}, -1)">−</button>
+              <span>${qty}</span>
+              <button onclick="changeQty(${item.id}, 1)">+</button>
+            </div>
+          </div>
+          <div class="col-md-2 text-end">
+            <div class="fw-bold">${formatPrice(item.price * qty)}</div>
+            <button class="btn btn-link text-danger p-0" onclick="removeFromCart(${item.id})">حذف</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  const subtotal = items.reduce((sum, entry) => sum + (entry.type === 'offer' ? 0 : entry.item.price * entry.qty), 0);
+
+  let discount = 0;
+  const offerDiscountRateSum = items.reduce((sum, entry) => {
+    if (entry.type !== 'offer') return sum;
+    return sum + Number(entry.item.discount || 0);
+  }, 0);
+
+  discount += subtotal * (offerDiscountRateSum / 100);
+
+  discount += items.reduce((sum, entry) => {
+    if (entry.type !== 'product') return sum;
+    const p = entry.item;
+    const perUnitDiscount = Math.max(0, (Number(p.oldPrice || p.price) - Number(p.price || 0)));
+    return sum + perUnitDiscount * entry.qty;
+  }, 0);
+
+  discount = Math.min(discount, subtotal);
+  const total = subtotal - discount;
+
+  cartSummary.innerHTML = `
+    <div class="summary-box">
+      <h5>ملخص الطلب</h5>
+      <div class="d-flex justify-content-between mt-3"><span>المجموع الفرعي</span><span>${formatPrice(subtotal)}</span></div>
+      <div class="d-flex justify-content-between"><span>الخصم</span><span>${formatPrice(discount)}</span></div>
+      <hr>
+      <div class="d-flex justify-content-between fw-bold"><span>الإجمالي</span><span>${formatPrice(total)}</span></div>
+      <button class="btn btn-light w-100 mt-3" onclick="submitOrder()">إرسال الطلب عبر واتساب</button>
+    </div>
+  `;
 }
 
-function initPage() {
-  initHomePage();
-  initOffersPage();
-  initProductsPage();
-  initCartPage();
-  initProductDetail();
-}
-
+// =========================
+// Admin access floating button (client-side)
+// =========================
 function createHiddenAdminButton() {
   if (window.location.pathname.includes('admin-panel-secure')) return;
 
@@ -698,25 +643,53 @@ function createHiddenAdminButton() {
   document.body.appendChild(button);
 }
 
-window.addEventListener('storage', syncSiteData);
-window.addEventListener('admin-data-updated', syncSiteData);
+// =========================
+// Start
+// =========================
+window.addEventListener('storage', () => {
+  // cart is local; redraw
+  if (document.getElementById('cart-items') && document.getElementById('cart-summary')) {
+    initCartPage();
+  }
+});
+
+window.addEventListener('admin-data-updated', () => {
+  // legacy: if you still update local, redraw. Firestore is primary.
+  if (document.getElementById('featured-products') || document.getElementById('offers-grid') || document.getElementById('products-grid')) {
+    syncFirestore();
+  }
+});
 
 document.addEventListener('DOMContentLoaded', () => {
   createHiddenAdminButton();
-  syncSiteData();
-  const heroSwiper = document.querySelector('.mySwiper');
-  if (heroSwiper && typeof Swiper !== 'undefined') {
-    new Swiper('.mySwiper', {
-      loop: true,
-      autoplay: { delay: 3000 },
-      pagination: { el: '.swiper-pagination', clickable: true },
-      navigation: { nextEl: '.swiper-button-next', prevEl: '.swiper-button-prev' }
-    });
-  }
-  if (typeof AOS !== 'undefined') {
-    AOS.init({ duration: 800, once: true });
-  }
-  if (typeof gsap !== 'undefined') {
-    gsap.from('.hero h1, .hero p, .hero .btn', { y: 40, opacity: 0, duration: 1, stagger: 0.2 });
-  }
+
+  // expose functions for inline onclick handlers in html
+  window.addToCart = addToCart;
+  window.addOfferToCart = addOfferToCart;
+  window.changeQty = changeQty;
+  window.removeFromCart = removeFromCart;
+  window.submitOrder = submitOrder;
+  window.changeMainImage = changeMainImage;
+
+  syncFirestore().catch((e) => {
+    console.warn('Firestore sync failed', e);
+  }).finally(() => {
+    // UI libs
+    const heroSwiper = document.querySelector('.mySwiper');
+    if (heroSwiper && typeof Swiper !== 'undefined') {
+      new Swiper('.mySwiper', {
+        loop: true,
+        autoplay: { delay: 3000 },
+        pagination: { el: '.swiper-pagination', clickable: true },
+        navigation: { nextEl: '.swiper-button-next', prevEl: '.swiper-button-prev' }
+      });
+    }
+    if (typeof AOS !== 'undefined') {
+      AOS.init({ duration: 800, once: true });
+    }
+    if (typeof gsap !== 'undefined') {
+      gsap.from('.hero h1, .hero p, .hero .btn', { y: 40, opacity: 0, duration: 1, stagger: 0.2 });
+    }
+  });
 });
+
