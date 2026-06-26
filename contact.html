@@ -41,7 +41,6 @@
               <h3>أرسل لنا رسالة</h3>
               <form id="contact-form">
                 <div class="mb-3"><input class="form-control" name="name" placeholder="الاسم" required /></div>
-                <div class="mb-3"><input class="form-control" name="email" placeholder="البريد الإلكتروني" required type="email" /></div>
                 <div class="mb-3"><input class="form-control" name="subject" placeholder="الموضوع" required /></div>
                 <div class="mb-3"><textarea class="form-control" name="message" rows="5" placeholder="الرسالة" required></textarea></div>
                 <button class="btn btn-primary-custom" type="submit">إرسال</button>
@@ -110,12 +109,11 @@
           e.preventDefault();
 
           const name = form.elements.name?.value?.trim() || '';
-          const email = form.elements.email?.value?.trim() || '';
           const subject = form.elements.subject?.value?.trim() || '';
           const message = form.elements.message?.value?.trim() || '';
 
           const phone = '201011001128';
-          const fullMessage = `مرحباً، لدي رسالة من صفحة تواصل معنا:\n\nالاسم: ${name}\nالبريد: ${email}\nالموضوع: ${subject}\n\nالرسالة:\n${message}`;
+          const fullMessage = `مرحباً، لدي رسالة من صفحة تواصل معنا:\n\nالاسم: ${name}\nالموضوع: ${subject}\n\nالرسالة:\n${message}`;
           const encoded = encodeURIComponent(fullMessage);
 
           window.open(`https://wa.me/${phone}?text=${encoded}`, '_blank');
