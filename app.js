@@ -143,7 +143,8 @@ function normalizeOffer(offer) {
     homeTitle: offer.homeTitle || offer.title || 'عرض مميز',
     homeDescription: offer.homeDescription || offer.description || 'عرض خاص من متجر المصري.',
     buttonText: offer.buttonText || 'عرض المزيد',
-    buttonLink: offer.buttonLink || 'offers.html'
+    buttonLink: offer.buttonLink || 'offers.html',
+    images: Array.isArray(offer.images) ? offer.images : []
   };
 }
 
@@ -259,18 +260,23 @@ function initOffersPage() {
   const container = document.getElementById('offers-grid');
   if (!container) return;
 
-  container.innerHTML = offers.map((offer) => `
-    <div class="col-lg-4" data-aos="fade-up">
-      <div class="offer-card p-4 h-100">
-        <h4>${offer.title}</h4>
-        <p>${offer.description}</p>
-        <div class="fw-bold text-gold">خصم ${offer.discount}%</div>
-        ${offer.price ? `<div class="fw-bold mt-2">${formatPrice(offer.price)}</div>` : ''}
-        <button class="btn btn-primary-custom mt-3" onclick="addOfferToCart(${offer.id})">إضافة إلى السلة</button>
+  container.innerHTML = offers.map((offer) => {
+    const mainImg = offer?.images?.[0];
+    return `
+      <div class="col-lg-4" data-aos="fade-up">
+        <div class="offer-card p-4 h-100">
+          ${mainImg ? `<img src="${mainImg}" alt="${offer.title}" class="offer-image" />` : ''}
+          <h4 class="mt-2">${offer.title}</h4>
+          <p>${offer.description}</p>
+          <div class="fw-bold text-gold">خصم ${offer.discount}%</div>
+          ${offer.price ? `<div class="fw-bold mt-2">${formatPrice(offer.price)}</div>` : ''}
+          <button class="btn btn-primary-custom mt-3" onclick="addOfferToCart(${offer.id})">إضافة إلى السلة</button>
+        </div>
       </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 }
+
 
 function renderHomeReviews() {
   const container = document.getElementById('home-reviews-grid');
@@ -315,20 +321,24 @@ function renderHomeOffers() {
     return;
   }
 
-  container.innerHTML = homeOffers.map((offer) => `
-    <div class="col-lg-6" data-aos="fade-up">
-      <div class="offer-card p-4 h-100">
-        <h4 class="fw-bold">${offer.homeTitle || offer.title}</h4>
-        <p>${offer.homeDescription || offer.description}</p>
-        <div class="d-flex flex-wrap gap-2 mt-3">
-          ${offer.price ? `<div class="w-100 fw-bold text-gold">${formatPrice(offer.price)}</div>` : ''}
-          <button class="btn btn-primary-custom" onclick="addOfferToCart(${offer.id})">إضافة إلى السلة</button>
-          <a href="${offer.buttonLink || 'offers.html'}" class="btn btn-outline-custom">${offer.buttonText || 'عرض المزيد'}</a>
+  container.innerHTML = homeOffers.map((offer) => {
+    const mainImg = offer?.images?.[0];
+    return `
+      <div class="col-lg-6" data-aos="fade-up">
+        <div class="offer-card p-4 h-100">
+          ${mainImg ? `<img src="${mainImg}" alt="${offer.homeTitle || offer.title}" class="offer-image" />` : ''}
+          <h4 class="fw-bold ${mainImg ? 'mt-2' : ''}">${offer.homeTitle || offer.title}</h4>
+          <p>${offer.homeDescription || offer.description}</p>
+          <div class="d-flex flex-wrap gap-2 mt-3">
+            ${offer.price ? `<div class="w-100 fw-bold text-gold">${formatPrice(offer.price)}</div>` : ''}
+            <a href="${offer.buttonLink || 'offers.html'}" class="btn btn-outline-custom">${offer.buttonText || 'عرض المزيد'}</a>
+          </div>
         </div>
       </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 }
+
 
 function initProductsPage() {
   const grid = document.getElementById('products-grid');
@@ -490,7 +500,32 @@ cartItemsContainer.innerHTML = '<div class="col-12"><div class="alert alert-info
     }).join('');
 
     const subtotal = items.reduce((sum, entry) => sum + (entry.type === 'offer' ? 0 : entry.item.price * entry.qty), 0);
-    const discount = subtotal > 500 ? 80 : 0;
+
+    // الخصم يكون بناءً على العروض/المنتجات داخل السلة.
+    // - عروض (type === 'offer') قيمتها مخزنة في entry.item.discount كنسبة مئوية.
+    // - على باقي المنتجات: لا يوجد خصم افتراضي إلا لو المنتج نفسه يحمل badge/y/oldPrice.
+    let discount = 0;
+
+    // 1) خصم عروض السلة (جمع/تجميع نسب)
+    const offerDiscountRateSum = items.reduce((sum, entry) => {
+      if (entry.type !== 'offer') return sum;
+      return sum + Number(entry.item.discount || 0);
+    }, 0);
+
+    // تحويل النسبة إلى قيمة خصم على subtotal. لو فيه أكثر من عرض، هنحسبهم كـ (rateSum) وليس تراكمي (compounding).
+    discount += subtotal * (offerDiscountRateSum / 100);
+
+    // 2) خصم المنتجات لو عندها oldPrice > price (فرق السعر كنقص)
+    discount += items.reduce((sum, entry) => {
+      if (entry.type !== 'product') return sum;
+      const p = entry.item;
+      const perUnitDiscount = Math.max(0, (Number(p.oldPrice || p.price) - Number(p.price || 0)));
+      return sum + perUnitDiscount * entry.qty;
+    }, 0);
+
+    // منع خصم أكبر من المجموع
+    discount = Math.min(discount, subtotal);
+
     const total = subtotal - discount;
     cartSummary.innerHTML = `
       <div class="summary-box">

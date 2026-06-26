@@ -1,4 +1,5 @@
 const adminStorageKey = 'almasry-admin-data';
+
 const defaultAdminState = {
   products: [
     {
@@ -44,7 +45,8 @@ const defaultAdminState = {
       homeTitle: 'عرض الصيف',
       homeDescription: 'خصم 15% على جميع الباقات والمنتجات المميزة في فصل الصيف.',
       buttonText: 'استكشف العرض',
-      buttonLink: 'offers.html'
+      buttonLink: 'offers.html',
+      images: []
     },
     {
       id: 2,
@@ -56,7 +58,8 @@ const defaultAdminState = {
       homeTitle: 'تورتات العيد',
       homeDescription: 'تصاميم مخصصة للعيد مع أسعار مميزة ومكونات فاخرة.',
       buttonText: 'عرض المزيد',
-      buttonLink: 'offers.html'
+      buttonLink: 'offers.html',
+      images: []
     }
   ],
   reviews: [{ id: 1, name: 'سارة', text: 'خدمة ممتازة وتقديم رائع', approved: true }],
@@ -76,7 +79,9 @@ function normalizeAdminProduct(product) {
     weight: product.weight || '1 كغ',
     featured: Boolean(product.featured),
     bestSeller: Boolean(product.bestSeller),
-    images: Array.isArray(product.images) && product.images.length ? product.images : ['https://images.unsplash.com/photo-1551024601-bec78aea704b?auto=format&fit=crop&w=900&q=80']
+    images: Array.isArray(product.images) && product.images.length
+      ? product.images
+      : ['https://images.unsplash.com/photo-1551024601-bec78aea704b?auto=format&fit=crop&w=900&q=80']
   };
 }
 
@@ -92,7 +97,8 @@ function normalizeOffer(offer) {
     homeTitle: offer.homeTitle || offer.title || 'عرض مميز',
     homeDescription: offer.homeDescription || offer.description || 'عرض خاص من متجر المصري.',
     buttonText: offer.buttonText || 'عرض المزيد',
-    buttonLink: offer.buttonLink || 'offers.html'
+    buttonLink: offer.buttonLink || 'offers.html',
+    images: Array.isArray(offer.images) ? offer.images : []
   };
 }
 
@@ -136,7 +142,9 @@ function showToast(message, type = 'success') {
 function renderDashboard() {
   const state = getAdminState();
   const approvedReviews = state.reviews.filter((review) => review.approved).length;
-  const popularProduct = state.products.find((product) => product.bestSeller) || state.products.reduce((best, product) => (product.rating > best.rating ? product : best), state.products[0] || { name: 'لا يوجد', rating: 0 });
+  const popularProduct =
+    state.products.find((product) => product.bestSeller) ||
+    state.products.reduce((best, product) => (product.rating > best.rating ? product : best), state.products[0] || { name: 'لا يوجد', rating: 0 });
 
   const productsCount = document.getElementById('stats-products');
   const categoriesCount = document.getElementById('stats-categories');
@@ -152,6 +160,7 @@ function renderDashboard() {
 function populateCategorySelects() {
   const state = getAdminState();
   const selectElements = [document.getElementById('product-category-select'), document.getElementById('product-edit-category-select')];
+
   selectElements.forEach((select) => {
     if (!select) return;
     const currentValue = select.value;
@@ -165,7 +174,11 @@ function populateCategorySelects() {
 function renderProducts() {
   const state = getAdminState();
   const tbody = document.getElementById('products-table');
-  tbody.innerHTML = state.products.map((product, index) => `
+  if (!tbody) return;
+
+  tbody.innerHTML = state.products
+    .map(
+      (product, index) => `
     <tr>
       <td>${index + 1}</td>
       <td>${product.name}</td>
@@ -177,20 +190,38 @@ function renderProducts() {
         <button class="btn btn-sm btn-outline-danger" onclick="deleteProduct(${product.id})">حذف</button>
       </td>
     </tr>
-  `).join('');
+  `
+    )
+    .join('');
 }
 
 function renderCategories() {
   const state = getAdminState();
   const list = document.getElementById('categories-list');
-  list.innerHTML = state.categories.map((category) => `<li class="list-group-item d-flex justify-content-between align-items-center">${category}<button class="btn btn-sm btn-outline-danger" onclick="deleteCategory('${category}')">حذف</button></li>`).join('');
+  if (!list) return;
+
+  list.innerHTML = state.categories
+    .map(
+      (category) => `
+    <li class="list-group-item d-flex justify-content-between align-items-center">
+      ${category}
+      <button class="btn btn-sm btn-outline-danger" onclick="deleteCategory('${category}')">حذف</button>
+    </li>
+  `
+    )
+    .join('');
+
   populateCategorySelects();
 }
 
 function renderOffers() {
   const state = getAdminState();
   const list = document.getElementById('offers-list');
-  list.innerHTML = state.offers.map((offer) => `
+  if (!list) return;
+
+  list.innerHTML = state.offers
+    .map(
+      (offer) => `
     <li class="list-group-item d-flex justify-content-between align-items-center gap-2">
       <div>
         <strong>${offer.title}</strong>
@@ -201,13 +232,19 @@ function renderOffers() {
         <button class="btn btn-sm btn-outline-danger" onclick="deleteOffer(${offer.id})">حذف</button>
       </div>
     </li>
-  `).join('');
+  `
+    )
+    .join('');
 }
 
 function renderReviews() {
   const state = getAdminState();
   const list = document.getElementById('reviews-list');
-  list.innerHTML = state.reviews.map((review) => `
+  if (!list) return;
+
+  list.innerHTML = state.reviews
+    .map(
+      (review) => `
     <li class="list-group-item">
       <div class="d-flex justify-content-between">
         <strong>${review.name}</strong>
@@ -220,25 +257,37 @@ function renderReviews() {
         <button class="btn btn-sm btn-outline-danger" onclick="deleteReview(${review.id})">حذف</button>
       </div>
     </li>
-  `).join('');
+  `
+    )
+    .join('');
 }
 
 function renderSettings() {
   const state = getAdminState();
-  document.getElementById('whatsapp-number').value = state.settings.whatsapp;
-  document.getElementById('site-logo').value = state.settings.logo;
-  document.getElementById('banner-text').value = state.settings.banner;
+  const whatsapp = document.getElementById('whatsapp-number');
+  const logo = document.getElementById('site-logo');
+  const banner = document.getElementById('banner-text');
+
+  if (whatsapp) whatsapp.value = state.settings.whatsapp;
+  if (logo) logo.value = state.settings.logo;
+  if (banner) banner.value = state.settings.banner;
 }
 
 function readImageFiles(input) {
   const files = Array.from(input?.files || []);
   if (!files.length) return Promise.resolve([]);
-  return Promise.all(files.map((file) => new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  })));
+
+  return Promise.all(
+    files.map(
+      (file) =>
+        new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        })
+    )
+  );
 }
 
 async function addProduct(event) {
@@ -246,14 +295,18 @@ async function addProduct(event) {
   const state = getAdminState();
   const form = event.target;
   const category = form.elements.category.value.trim();
+
   if (!category) {
     showToast('يرجى اختيار تصنيف', 'error');
     return;
   }
+
   if (!state.categories.includes(category)) {
     state.categories.push(category);
   }
+
   const images = await readImageFiles(form.elements.imageFiles);
+
   const product = {
     id: Date.now(),
     name: form.elements.name.value.trim(),
@@ -269,11 +322,14 @@ async function addProduct(event) {
     bestSeller: form.elements.bestSeller.checked,
     images: images.length ? images : ['https://images.unsplash.com/photo-1551024601-bec78aea704b?auto=format&fit=crop&w=900&q=80']
   };
+
   state.products.push(product);
   saveAdminState(state);
+
   renderDashboard();
   renderProducts();
   renderCategories();
+
   form.reset();
   showToast('تمت إضافة المنتج');
 }
@@ -282,7 +338,10 @@ function editProduct(id) {
   const state = getAdminState();
   const product = state.products.find((item) => item.id === id);
   if (!product) return;
+
   const form = document.getElementById('product-edit-form');
+  if (!form) return;
+
   form.elements.name.value = product.name;
   form.elements.category.value = product.category;
   form.elements.price.value = product.price;
@@ -294,6 +353,7 @@ function editProduct(id) {
   form.elements.ingredients.value = product.ingredients.join(', ');
   form.elements.featured.checked = product.featured;
   form.elements.bestSeller.checked = product.bestSeller;
+
   form.dataset.editId = id;
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -303,36 +363,50 @@ async function updateProduct(event) {
   const state = getAdminState();
   const form = event.target;
   const id = Number(form.dataset.editId);
+
   const product = state.products.find((item) => item.id === id);
   if (!product) return;
+
   const category = form.elements.category.value.trim();
   if (!category) {
     showToast('يرجى اختيار تصنيف', 'error');
     return;
   }
+
   if (!state.categories.includes(category)) {
     state.categories.push(category);
   }
+
   const images = await readImageFiles(form.elements.imageFiles);
-  state.products = state.products.map((item) => item.id === id ? {
-    ...item,
-    name: form.elements.name.value.trim(),
-    category,
-    price: Number(form.elements.price.value || 0),
-    oldPrice: Number(form.elements.oldPrice.value || form.elements.price.value || 0),
-    rating: Number(form.elements.rating.value || 4.8),
-    badge: form.elements.badge.value.trim() || 'مميز',
-    description: form.elements.description.value.trim() || 'منتج فاخر من متجر المصري.',
-    ingredients: form.elements.ingredients.value.split(',').map((string) => string.trim()).filter(Boolean),
-    weight: form.elements.weight.value.trim() || '1 كغ',
-    featured: form.elements.featured.checked,
-    bestSeller: form.elements.bestSeller.checked,
-    images: images.length ? images : item.images
-  } : item);
+
+  state.products = state.products.map((item) =>
+    item.id === id
+      ? {
+          ...item,
+          name: form.elements.name.value.trim(),
+          category,
+          price: Number(form.elements.price.value || 0),
+          oldPrice: Number(form.elements.oldPrice.value || form.elements.price.value || 0),
+          rating: Number(form.elements.rating.value || 4.8),
+          badge: form.elements.badge.value.trim() || 'مميز',
+          description: form.elements.description.value.trim() || 'منتج فاخر من متجر المصري.',
+          ingredients: form.elements.ingredients.value
+            .split(',')
+            .map((string) => string.trim())
+            .filter(Boolean),
+          weight: form.elements.weight.value.trim() || '1 كغ',
+          featured: form.elements.featured.checked,
+          bestSeller: form.elements.bestSeller.checked,
+          images: images.length ? images : item.images
+        }
+      : item
+  );
+
   saveAdminState(state);
   renderDashboard();
   renderProducts();
   renderCategories();
+
   form.reset();
   showToast('تم تحديث المنتج');
 }
@@ -341,6 +415,7 @@ function deleteProduct(id) {
   const state = getAdminState();
   state.products = state.products.filter((product) => product.id !== id);
   saveAdminState(state);
+
   renderDashboard();
   renderProducts();
   showToast('تم حذف المنتج');
@@ -350,14 +425,16 @@ function addCategory(event) {
   event.preventDefault();
   const state = getAdminState();
   const input = document.getElementById('category-name');
-  const category = input.value.trim();
+  const category = input?.value?.trim();
   if (!category) return;
+
   if (!state.categories.includes(category)) {
     state.categories.push(category);
   }
+
   saveAdminState(state);
   renderCategories();
-  input.value = '';
+  if (input) input.value = '';
   showToast('تمت إضافة التصنيف');
 }
 
@@ -373,7 +450,10 @@ function editOffer(id) {
   const state = getAdminState();
   const offer = state.offers.find((item) => item.id === id);
   if (!offer) return;
+
   const form = document.getElementById('offer-form');
+  if (!form) return;
+
   form.elements.title.value = offer.title;
   form.elements.description.value = offer.description;
   form.elements.discount.value = offer.discount;
@@ -382,29 +462,42 @@ function editOffer(id) {
   form.elements.homeTitle.value = offer.homeTitle || offer.title;
   form.elements.homeDescription.value = offer.homeDescription || offer.description;
   form.elements.buttonText.value = offer.buttonText || 'عرض المزيد';
+
   form.dataset.editId = id;
-  form.querySelector('button').textContent = 'تحديث العرض';
+  form.querySelector('button') && (form.querySelector('button').textContent = 'تحديث العرض');
+
+  // file input: لن نعبّيه (security)، سنحتفظ بالصور القديمة عند التحديث لو لم يتم رفع جديد.
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function addOffer(event) {
+async function addOffer(event) {
   event.preventDefault();
   const state = getAdminState();
   const form = event.target;
+
+  const images = await readImageFiles(form.elements.offerImageFiles);
+
+  const isEdit = Boolean(form.dataset.editId);
+  const editId = Number(form.dataset.editId);
+
+  const existing = isEdit ? state.offers.find((o) => o.id === editId) : null;
+  const prevImages = Array.isArray(existing?.images) ? existing.images : [];
+
   const offerData = {
-    id: Number(form.dataset.editId) || Date.now(),
-    title: form.title.value.trim(),
-    description: form.description.value.trim(),
-    discount: Number(form.discount.value || 0),
-    price: Number(form.price.value || 0),
-    showOnHome: form.showOnHome.checked,
-    homeTitle: form.homeTitle.value.trim() || form.title.value.trim(),
-    homeDescription: form.homeDescription.value.trim() || form.description.value.trim(),
-    buttonText: form.buttonText.value.trim() || 'عرض المزيد'
+    id: editId || Date.now(),
+    title: form.elements.title.value.trim(),
+    description: form.elements.description.value.trim(),
+    discount: Number(form.elements.discount.value || 0),
+    price: Number(form.elements.price.value || 0),
+    showOnHome: form.elements.showOnHome.checked,
+    homeTitle: form.elements.homeTitle.value.trim() || form.title.value.trim(),
+    homeDescription: form.elements.homeDescription.value.trim() || form.description.value.trim(),
+    buttonText: form.elements.buttonText.value.trim() || 'عرض المزيد',
+    images: images.length ? images : prevImages
   };
 
-  if (form.dataset.editId) {
-    state.offers = state.offers.map((offer) => offer.id === Number(form.dataset.editId) ? offerData : offer);
+  if (isEdit) {
+    state.offers = state.offers.map((offer) => (offer.id === editId ? offerData : offer));
     showToast('تم تحديث العرض');
   } else {
     state.offers.push(offerData);
@@ -415,7 +508,7 @@ function addOffer(event) {
   renderOffers();
   form.reset();
   delete form.dataset.editId;
-  form.querySelector('button').textContent = 'إضافة عرض';
+  if (form.querySelector('button')) form.querySelector('button').textContent = 'إضافة عرض';
 }
 
 function deleteOffer(id) {
@@ -428,7 +521,7 @@ function deleteOffer(id) {
 
 function approveReview(id) {
   const state = getAdminState();
-  state.reviews = state.reviews.map((review) => review.id === id ? { ...review, approved: true } : review);
+  state.reviews = state.reviews.map((review) => (review.id === id ? { ...review, approved: true } : review));
   saveAdminState(state);
   renderReviews();
   showToast('تم قبول التقييم');
@@ -436,7 +529,7 @@ function approveReview(id) {
 
 function rejectReview(id) {
   const state = getAdminState();
-  state.reviews = state.reviews.map((review) => review.id === id ? { ...review, approved: false } : review);
+  state.reviews = state.reviews.map((review) => (review.id === id ? { ...review, approved: false } : review));
   saveAdminState(state);
   renderReviews();
   showToast('تم رفض التقييم');
@@ -465,17 +558,18 @@ function saveSettings(event) {
 function initAdminLogin() {
   const loginForm = document.getElementById('admin-login-form');
   if (!loginForm) return;
+
   loginForm.addEventListener('submit', (event) => {
     event.preventDefault();
+
     const emailInput = document.getElementById('admin-email');
     const passwordInput = document.getElementById('admin-password');
-    const email = emailInput.value.trim().toLowerCase();
-    const password = passwordInput.value.trim();
-    const validCredentials = [
-      ['admin@elmsry.com', '01011001128']
-    ];
+    const email = emailInput?.value?.trim()?.toLowerCase();
+    const password = passwordInput?.value?.trim();
 
+    const validCredentials = [['admin@elmsry.com', '01011001128']];
     const isValid = validCredentials.some(([validEmail, validPassword]) => email === validEmail && password === validPassword);
+
     if (isValid) {
       localStorage.setItem('almasry-admin-auth', 'true');
       window.location.reload();
@@ -491,12 +585,18 @@ function initAdminLogin() {
 
 function initAdminPanel() {
   if (!localStorage.getItem('almasry-admin-auth')) {
-    document.getElementById('admin-panel').style.display = 'none';
-    document.getElementById('admin-login').style.display = 'block';
+    const panel = document.getElementById('admin-panel');
+    const login = document.getElementById('admin-login');
+    if (panel) panel.style.display = 'none';
+    if (login) login.style.display = 'block';
     return;
   }
-  document.getElementById('admin-panel').style.display = 'block';
-  document.getElementById('admin-login').style.display = 'none';
+
+  const panel = document.getElementById('admin-panel');
+  const login = document.getElementById('admin-login');
+  if (panel) panel.style.display = 'block';
+  if (login) login.style.display = 'none';
+
   renderDashboard();
   renderProducts();
   renderCategories();
@@ -508,11 +608,17 @@ function initAdminPanel() {
 document.addEventListener('DOMContentLoaded', () => {
   initAdminLogin();
   initAdminPanel();
+
   document.getElementById('product-form')?.addEventListener('submit', addProduct);
   document.getElementById('product-edit-form')?.addEventListener('submit', updateProduct);
   document.getElementById('category-form')?.addEventListener('submit', addCategory);
   document.getElementById('offer-form')?.addEventListener('submit', addOffer);
   document.getElementById('settings-form')?.addEventListener('submit', saveSettings);
+
   populateCategorySelects();
-  AOS.init({ duration: 800, once: true });
+
+  if (typeof AOS !== 'undefined' && AOS.init) {
+    AOS.init({ duration: 800, once: true });
+  }
 });
+
