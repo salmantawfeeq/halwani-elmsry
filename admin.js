@@ -237,30 +237,41 @@ function renderOffers() {
     .join('');
 }
 
+function safeText(value) {
+  return String(value ?? '').replaceAll('"', '"');
+}
+
 function renderReviews() {
   const state = getAdminState();
   const list = document.getElementById('reviews-list');
   if (!list) return;
 
   list.innerHTML = state.reviews
-    .map(
-      (review) => `
-    <li class="list-group-item">
-      <div class="d-flex justify-content-between">
-        <strong>${review.name}</strong>
-        <span>${review.approved ? 'مقبول' : 'مرفوض'}</span>
-      </div>
-      <p class="small mb-2">${review.text}</p>
-      <div class="d-flex gap-2">
-        <button class="btn btn-sm btn-outline-success" onclick="approveReview(${review.id})">قبول</button>
-        <button class="btn btn-sm btn-outline-warning" onclick="rejectReview(${review.id})">رفض</button>
-        <button class="btn btn-sm btn-outline-danger" onclick="deleteReview(${review.id})">حذف</button>
-      </div>
-    </li>
-  `
-    )
+    .map((review) => {
+      const productLine = review.productName ? `<div class="small text-muted mt-2">${safeText(review.productName)}</div>` : '';
+      const orderLine = review.orderRef ? `<div class="small text-muted">مرجع الطلب: ${safeText(review.orderRef)}</div>` : '';
+      const dateLine = review.createdAt ? `<div class="small text-muted">${new Date(review.createdAt).toLocaleDateString('ar-EG')}</div>` : '';
+      return `
+        <li class="list-group-item">
+          <div class="d-flex justify-content-between">
+            <strong>${safeText(review.name)}</strong>
+            <span>${review.approved ? 'مقبول' : 'مرفوض'}</span>
+          </div>
+          <p class="small mb-2">${safeText(review.text)}</p>
+          ${productLine}
+          ${orderLine}
+          ${dateLine}
+          <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-outline-success" onclick="approveReview(${review.id})">قبول</button>
+            <button class="btn btn-sm btn-outline-warning" onclick="rejectReview(${review.id})">رفض</button>
+            <button class="btn btn-sm btn-outline-danger" onclick="deleteReview(${review.id})">حذف</button>
+          </div>
+        </li>
+      `;
+    })
     .join('');
 }
+
 
 function renderSettings() {
   const state = getAdminState();
@@ -605,6 +616,108 @@ function initAdminPanel() {
   renderSettings();
 }
 
+function loadPendingOrders() {
+  try {
+    const key = 'almasry-orders-pending';
+    const pending = JSON.parse(localStorage.getItem(key) || '[]');
+    return Array.isArray(pending) ? pending : [];
+  } catch {
+    return [];
+  }
+}
+
+function getProductById(id) {
+  const state = getAdminState();
+  return state.products.find((p) => p.id === Number(id));
+}
+
+function renderPendingOrdersUI() {
+  const orderSelect = document.getElementById('pending-order-select');
+  const productSelect = document.getElementById('pending-order-product-select');
+  if (!orderSelect || !productSelect) return;
+
+  const pendingOrders = loadPendingOrders();
+  orderSelect.innerHTML = pendingOrders.length
+    ? pendingOrders.map((o, idx) => `<option value="${idx}">${o.orderRef} (${new Date(o.createdAt || Date.now()).toLocaleDateString('ar-EG')})</option>`).join('')
+    : '<option value="">لا توجد طلبات pending</option>';
+
+  function renderProductsForSelectedOrder() {
+    const idx = Number(orderSelect.value);
+    productSelect.innerHTML = '';
+    const order = pendingOrders[idx];
+    if (!order) {
+      productSelect.innerHTML = '<option value="">—</option>';
+      return;
+    }
+
+    const productLines = (order.items || [])
+      .filter((it) => it.type === 'product' && it.productId)
+      .map((it) => ({ productId: it.productId, label: it.title || String(it.productId) }));
+
+    const unique = Array.from(new Map(productLines.map((p) => [String(p.productId), p])).values());
+
+    productSelect.innerHTML = unique.length ? unique.map((p) => `<option value="${p.productId}">${p.label}</option>`).join('') : '<option value="">لا يوجد منتج قابل للتقييم</option>';
+  }
+
+  renderProductsForSelectedOrder();
+  orderSelect.addEventListener('change', renderProductsForSelectedOrder);
+}
+
+function submitPendingReview() {
+  const orderSelect = document.getElementById('pending-order-select');
+  const productSelect = document.getElementById('pending-order-product-select');
+  const nameInput = document.getElementById('pending-reviewer-name');
+  const textInput = document.getElementById('pending-review-text');
+  const ratingInput = document.getElementById('pending-review-rating');
+
+  if (!orderSelect || !productSelect || !nameInput || !textInput) return;
+
+  const pendingOrders = loadPendingOrders();
+  const orderIdx = Number(orderSelect.value);
+  const order = pendingOrders[orderIdx];
+  if (!order) {
+    showToast('اختر طلباً أولاً', 'error');
+    return;
+  }
+
+  const productId = productSelect.value;
+  if (!productId) {
+    showToast('اختر منتج من الطلب', 'error');
+    return;
+  }
+
+  const product = getProductById(productId);
+  const productName = product?.name || 'منتج';
+
+  const state = getAdminState();
+  const review = {
+    id: Date.now(),
+    name: (nameInput.value || '').trim() || 'عميلنا المميز',
+    text: (textInput.value || '').trim() || '',
+    approved: false,
+    productId: Number(productId),
+    productName,
+    orderRef: order.orderRef,
+    createdAt: new Date().toISOString(),
+    rating: Number(ratingInput?.value || 4.8)
+  };
+
+  if (!review.text) {
+    showToast('اكتب نص التقييم', 'error');
+    return;
+  }
+
+  state.reviews = Array.isArray(state.reviews) ? state.reviews : [];
+  state.reviews.push(review);
+  saveAdminState(state);
+
+  // تأكيد: لا نزيل pending order تلقائياً (للسلامة)، لكن يمكن وضع reviewed flag إن رغبت.
+  showToast('تم إرسال التقييم للمراجعة');
+  if (textInput) textInput.value = '';
+  if (nameInput) nameInput.value = '';
+  renderReviews();
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   initAdminLogin();
   initAdminPanel();
@@ -615,10 +728,15 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('offer-form')?.addEventListener('submit', addOffer);
   document.getElementById('settings-form')?.addEventListener('submit', saveSettings);
 
+  // Pending Orders UI
+  renderPendingOrdersUI();
+  document.getElementById('submit-pending-review-btn')?.addEventListener('click', submitPendingReview);
+
   populateCategorySelects();
 
   if (typeof AOS !== 'undefined' && AOS.init) {
     AOS.init({ duration: 800, once: true });
   }
 });
+
 

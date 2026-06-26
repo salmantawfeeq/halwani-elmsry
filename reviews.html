@@ -70,15 +70,24 @@
             return;
           }
 
-          container.innerHTML = approved.map((review, index) => `
-            <div class="col-lg-4" data-aos="fade-up" ${index === 1 ? 'data-aos-delay="100"' : index === 2 ? 'data-aos-delay="200"' : ''}>
-              <div class="review-card p-4">
-                <div class="text-warning mb-3">★★★★★</div>
-                <p>“${(review.text || '').replaceAll('"', '"')}”</p>
-                <strong>— ${(review.name || '').replaceAll('"', '"')}</strong>
+          container.innerHTML = approved.map((review, index) => {
+            const productLabel = review.productName ? `عن المنتج: ${review.productName}` : 'عن المنتج';
+            const orderLabel = review.orderRef ? `مرجع الطلب: ${review.orderRef}` : '';
+            const dateLabel = review.createdAt ? `تاريخ التقييم: ${new Date(review.createdAt).toLocaleDateString('ar-EG')}` : '';
+
+            return `
+              <div class="col-lg-4" data-aos="fade-up" ${index === 1 ? 'data-aos-delay="100"' : index === 2 ? 'data-aos-delay="200"' : ''}>
+                <div class="review-card p-4">
+                  <div class="text-warning mb-3">★★★★★</div>
+                  <p>“${(review.text || '').replaceAll('"', '"')}”</p>
+                  <strong>— ${(review.name || '').replaceAll('"', '"')}</strong>
+                  <div class="mt-2 small text-muted">${productLabel}</div>
+                  ${orderLabel ? `<div class="small text-muted">${orderLabel}</div>` : ''}
+                  ${dateLabel ? `<div class="small text-muted">${dateLabel}</div>` : ''}
+                </div>
               </div>
-            </div>
-          `).join('');
+            `;
+          }).join('');
 
           if (window.AOS && typeof AOS.refreshHard === 'function') AOS.refreshHard();
         } catch (e) {
