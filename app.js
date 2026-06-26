@@ -618,7 +618,11 @@ function submitOrder() {
 
   const encoded = encodeURIComponent(message);
   window.open(`https://wa.me/201011001128?text=${encoded}`, '_blank');
+
+  // لا نفرّغ السلة بعد إرسال الطلب عبر واتساب، لتظل محفوظة للعميل.
+  // حفظ الطلب يتم بالفعل داخل localStorage (almasry-orders-pending).
 }
+
 
 
 function initProductDetail() {

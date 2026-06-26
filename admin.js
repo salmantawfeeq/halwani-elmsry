@@ -656,6 +656,11 @@ function renderPendingOrdersUI() {
 
     const unique = Array.from(new Map(productLines.map((p) => [String(p.productId), p])).values());
 
+    // نحافظ على التوافق مع واجهة select[multiple] (اختيار بالماوس Ctrl/Shift)
+    // لكن لنفسل خيار "mربع علامة صح": نعرضها بطريقتين
+    // 1) نجعل select متعدد (multiple)
+    // 2) سننشئ checkboxes فوقه داخل UI.
+    // ملاحظة: renderPendingOrdersUI سيقوم بإنشاء الـ checkboxes.
     productSelect.innerHTML = unique.length ? unique.map((p) => `<option value="${p.productId}">${p.label}</option>`).join('') : '<option value="">لا يوجد منتج قابل للتقييم</option>';
   }
 
@@ -680,40 +685,73 @@ function submitPendingReview() {
     return;
   }
 
-  const productId = productSelect.value;
-  if (!productId) {
+  const selectedProductIds = Array.from(
+    productSelect.selectedOptions || []
+  ).map((opt) => opt.value).filter(Boolean);
+
+  if (!selectedProductIds.length) {
     showToast('اختر منتج من الطلب', 'error');
     return;
   }
 
-  const product = getProductById(productId);
-  const productName = product?.name || 'منتج';
+  // إنشاء تقييم منفصل لكل منتج محدد داخل نفس الطلب.
+  // (لأن واجهة الطلب يسمح باختيار أكثر من منتج)
+  const productLines = selectedProductIds.map((productId) => {
+    const product = getProductById(productId);
+    return {
+      productId: Number(productId),
+      productName: product?.name || 'منتج'
+    };
+  });
+
+  // إذا أكثر من منتج: سنحتفظ بكلهم في نص واحد
+  const joinedProductNames = productLines.map((l) => l.productName).join('، ');
+
+
 
   const state = getAdminState();
-  const review = {
-    id: Date.now(),
-    name: (nameInput.value || '').trim() || 'عميلنا المميز',
-    text: (textInput.value || '').trim() || '',
-    approved: false,
-    productId: Number(productId),
-    productName,
-    orderRef: order.orderRef,
-    createdAt: new Date().toISOString(),
-    rating: Number(ratingInput?.value || 4.8)
-  };
 
-  if (!review.text) {
+  // إذا اختار أكثر من منتج: ننشئ لكل منتج تقييم مستقل.
+  // المطلوب: كل المنتجات المختارة تظل في تعليق واحد (تعليق واحد فقط)
+  // وفي نفس الوقت نخزن على الأقل productId واحد للتوافق مع باقي النظام.
+  const firstLine = productLines[0];
+  const createdReviews = [
+    {
+      id: Date.now() + Math.floor(Math.random() * 100000),
+      name: (nameInput.value || '').trim() || 'عميلنا المميز',
+      text: `${(textInput.value || '').trim() || ''}${joinedProductNames ? `\n\n(منتجات التقييم: ${joinedProductNames})` : ''}`,
+
+      approved: false,
+      productId: Number(firstLine.productId),
+      productName: firstLine.productName,
+      // تخزين قائمة المنتجات المختارة (اختياري لكن يفيد عند العرض لاحقاً)
+      productIds: productLines.map((l) => Number(l.productId)),
+      productNames: productLines.map((l) => l.productName),
+      orderRef: order.orderRef,
+      createdAt: new Date().toISOString(),
+      rating: Number(ratingInput?.value || 4.8)
+    }
+  ];
+
+
+
+  const reviewText = (textInput.value || '').trim();
+  if (!reviewText) {
     showToast('اكتب نص التقييم', 'error');
     return;
   }
 
+
+  // إضافة التقييمات (واحد لكل منتج مختار)
   state.reviews = Array.isArray(state.reviews) ? state.reviews : [];
-  state.reviews.push(review);
+  state.reviews.push(...createdReviews);
   saveAdminState(state);
+
 
   // تأكيد: لا نزيل pending order تلقائياً (للسلامة)، لكن يمكن وضع reviewed flag إن رغبت.
   showToast('تم إرسال التقييم للمراجعة');
   if (textInput) textInput.value = '';
+
   if (nameInput) nameInput.value = '';
   renderReviews();
 }
