@@ -168,8 +168,19 @@ function loadOffersFromStorage() {
 function syncSiteData() {
   products = loadProductsFromStorage();
   offers = loadOffersFromStorage();
-  initPage();
+
+  // تحديث الصفحة فقط بما هو موجود فيها لتفادي مشاكل التهيئة المتكررة
+  if (document.getElementById('featured-products')) initHomePage();
+  if (document.getElementById('homepage-offers')) renderHomeOffers();
+  if (document.getElementById('home-reviews-grid')) renderHomeReviews();
+
+  if (document.getElementById('offers-grid')) initOffersPage();
+  if (document.getElementById('products-grid')) initProductsPage();
+
+  if (document.getElementById('cart-items') && document.getElementById('cart-summary')) initCartPage();
+  if (document.getElementById('product-detail')) initProductDetail();
 }
+
 
 function addToCart(productId, qty = 1) {
   const item = cart.find((entry) => entry.id === productId && entry.type !== 'offer');
@@ -245,6 +256,7 @@ function renderBestSellers() {
   container.innerHTML = bestSellers.map((product) => `
     <div class="col-lg-4">
       <div class="product-card p-4 h-100">
+        <img src="${product.images?.[0]}" alt="${product.name}" class="w-100 mb-3" style="height:200px; object-fit:cover;" />
         <h5 class="fw-bold">${product.name}</h5>
         <p class="text-muted">${product.description}</p>
         <span class="price-current">${formatPrice(product.price)}</span>
@@ -255,6 +267,7 @@ function renderBestSellers() {
     </div>
   `).join('');
 }
+
 
 function initOffersPage() {
   const container = document.getElementById('offers-grid');
@@ -299,16 +312,28 @@ function renderHomeReviews() {
 
   const homeReviews = approved.slice(0, 3);
 
-  container.innerHTML = homeReviews.map((review, index) => `
-    <div class="col-lg-4" data-aos="fade-up"${index === 1 ? ' data-aos-delay="100"' : index === 2 ? ' data-aos-delay="200"' : ''}>
-      <div class="review-card p-4">
-        <div class="text-warning mb-3">★★★★★</div>
-        <p>“${(review.text || '').replaceAll('"', '"')}”</p>
-        <strong>— ${(review.name || '').replaceAll('"', '"')}</strong>
-      </div>
-    </div>
-  `).join('');
+  container.innerHTML = homeReviews
+    .map((review, index) => {
+      const productLabel = review.productName ? `عن المنتج: ${review.productName}` : 'عن المنتج';
+      const orderLabel = review.orderRef ? `مرجع الطلب: ${review.orderRef}` : '';
+      const dateLabel = review.createdAt ? `تاريخ التقييم: ${new Date(review.createdAt).toLocaleDateString('ar-EG')}` : '';
+
+      return `
+        <div class="col-lg-4" data-aos="fade-up"${index === 1 ? ' data-aos-delay="100"' : index === 2 ? ' data-aos-delay="200"' : ''}>
+          <div class="review-card p-4">
+            <div class="text-warning mb-3">★★★★★</div>
+            <p>“${(review.text || '').replaceAll('"', '"')}”</p>
+            <strong>— ${(review.name || '').replaceAll('"', '"')}</strong>
+            <div class="mt-2 small text-muted">${productLabel}</div>
+            ${orderLabel ? `<div class="small text-muted">${orderLabel}</div>` : ''}
+            ${dateLabel ? `<div class="small text-muted">${dateLabel}</div>` : ''}
+          </div>
+        </div>
+      `;
+    })
+    .join('');
 }
+
 
 function renderHomeOffers() {
   const container = document.getElementById('homepage-offers');
@@ -557,10 +582,44 @@ function removeFromCart(productId) {
 function submitOrder() {
   const items = getCartItems();
   const total = items.reduce((sum, entry) => sum + (entry.type === 'offer' ? 0 : entry.item.price * entry.qty), 0);
-  const message = `مرحباً، أريد طلباً من متجر المصري:\n${items.map((entry) => entry.type === 'offer' ? `- العرض: ${entry.item.title} × ${entry.qty} (خصم ${entry.item.discount}%)` : `- ${entry.item.name} × ${entry.qty}`).join('\n')}\nالإجمالي: ${formatPrice(total)}`;
+
+  // إنشاء مرجع طلب فريد وربطه بالتقييم لاحقاً
+  const orderRef = `MASRY-${Date.now()}`;
+  const order = {
+    orderRef,
+    items: items.map((entry) => ({
+      type: entry.type,
+      id: entry.type === 'offer' ? `offer-${entry.item.id}` : entry.item.id,
+      title: entry.type === 'offer' ? entry.item.title : entry.item.name,
+      qty: entry.qty,
+      productId: entry.type === 'product' ? entry.item.id : null
+    })),
+    total,
+    createdAt: new Date().toISOString(),
+    reviewed: false
+  };
+
+  try {
+    const pendingKey = 'almasry-orders-pending';
+    const pending = JSON.parse(localStorage.getItem(pendingKey) || '[]');
+    pending.push(order);
+    localStorage.setItem(pendingKey, JSON.stringify(pending));
+  } catch (e) {
+    console.warn('Unable to save pending orders', e);
+  }
+
+  const message = `مرحباً، أريد طلباً من متجر المصري (مرجع الطلب: ${orderRef}):\n${items
+    .map((entry) =>
+      entry.type === 'offer'
+        ? `- العرض: ${entry.item.title} × ${entry.qty} (خصم ${entry.item.discount}%)`
+        : `- ${entry.item.name} × ${entry.qty}`
+    )
+    .join('\n')}\nالإجمالي: ${formatPrice(total)}`;
+
   const encoded = encodeURIComponent(message);
   window.open(`https://wa.me/201011001128?text=${encoded}`, '_blank');
 }
+
 
 function initProductDetail() {
   const productId = new URLSearchParams(window.location.search).get('id');

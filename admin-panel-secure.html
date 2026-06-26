@@ -116,7 +116,30 @@
                 <h4>إدارة التقييمات</h4>
                 <ul id="reviews-list" class="list-group"></ul>
               </div>
+
+              <div class="admin-card mt-4">
+                <h4>طلبات العملاء (Pending Orders)</h4>
+                <div class="mb-3"><select id="pending-order-select" class="form-select"></select></div>
+
+                <div class="mb-3">
+                  <label class="form-label">المنتج من الطلب</label>
+                  <select id="pending-order-product-select" class="form-select"></select>
+                </div>
+
+                <div class="mb-3"><input id="pending-reviewer-name" class="form-control" placeholder="اسم العميل" /></div>
+                <div class="mb-3"><textarea id="pending-review-text" class="form-control" rows="3" placeholder="اكتب نص التقييم"></textarea></div>
+
+                <div class="d-flex align-items-center gap-2 mb-3">
+                  <span class="text-warning">★★★★★</span>
+                  <input id="pending-review-rating" type="number" min="1" max="5" step="0.1" class="form-control" style="max-width: 120px;" placeholder="التقييم (مثال: 4.8)" />
+                </div>
+
+                <div class="d-flex gap-2">
+                  <button class="btn btn-primary-custom w-100" type="button" id="submit-pending-review-btn">إرسال للتقييم</button>
+                </div>
+              </div>
             </div>
+
             <div class="col-lg-6">
               <div class="admin-card">
                 <h4>الإعدادات</h4>
@@ -129,6 +152,7 @@
               </div>
             </div>
           </div>
+
         </div>
       </div>
     </div>
