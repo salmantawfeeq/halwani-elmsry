@@ -1,193 +1,158 @@
-const adminStorageKey = 'almasry-admin-data';
+// ADMIN PANEL - Firebase Auth + Firestore CRUD
 
-const defaultAdminState = {
-  products: [
-    {
-      id: 1,
-      name: 'حلويات المصري الخاصة',
-      category: 'شرقية',
-      price: 180,
-      oldPrice: 220,
-      rating: 4.9,
-      badge: 'الأكثر طلباً',
-      description: 'مزيج فاخر من الحلاوة الشرقية واللوز والشوكولاتة.',
-      ingredients: ['لوز', 'سكر', 'ماء ورد', 'شوكولاتة'],
-      weight: '500 غ',
-      featured: true,
-      bestSeller: true,
-      images: ['https://images.unsplash.com/photo-1551024601-bec78aea704b?auto=format&fit=crop&w=900&q=80']
-    },
-    {
-      id: 2,
-      name: 'تورتة الزهور الذهبية',
-      category: 'تورتات',
-      price: 650,
-      oldPrice: 780,
-      rating: 5,
-      badge: 'حصري',
-      description: 'تورتة أنيقة للاحتفالات مع طبقات من الكيك والكراميل.',
-      ingredients: ['كيك فانيليا', 'كراميل', 'فواكه'],
-      weight: '2.5 كغ',
-      featured: true,
-      bestSeller: true,
-      images: ['https://images.unsplash.com/photo-1464349095431-e9a21285b5f3?auto=format&fit=crop&w=900&q=80']
-    }
-  ],
-  categories: ['شرقية', 'غربية', 'تورتات', 'جاتوه', 'كيك', 'هدايا', 'عروض'],
-  offers: [
-    {
-      id: 1,
-      title: 'عرض الصيف',
-      description: 'خصم 15% على جميع الباقات والمنتجات المميزة في فصل الصيف.',
-      discount: 15,
-      price: 320,
-      showOnHome: true,
-      homeTitle: 'عرض الصيف',
-      homeDescription: 'خصم 15% على جميع الباقات والمنتجات المميزة في فصل الصيف.',
-      buttonText: 'استكشف العرض',
-      buttonLink: 'offers.html',
-      images: []
-    },
-    {
-      id: 2,
-      title: 'تورتات العيد',
-      description: 'تصاميم مخصصة للعيد مع أسعار مميزة ومكونات فاخرة.',
-      discount: 20,
-      price: 450,
-      showOnHome: true,
-      homeTitle: 'تورتات العيد',
-      homeDescription: 'تصاميم مخصصة للعيد مع أسعار مميزة ومكونات فاخرة.',
-      buttonText: 'عرض المزيد',
-      buttonLink: 'offers.html',
-      images: []
-    }
-  ],
-  reviews: [{ id: 1, name: 'سارة', text: 'خدمة ممتازة وتقديم رائع', approved: true }],
-  settings: { whatsapp: '+201011001128', logo: 'المصري', banner: 'حلويات فاخرة لكل مناسبة' }
-};
+import { auth, db } from './firebase-init.js';
+import {
+  signInWithEmailAndPassword,
+  onAuthStateChanged,
+  signOut
+} from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 
-function normalizeAdminProduct(product) {
-  return {
-    ...product,
-    id: Number(product.id || Date.now()),
-    price: Number(product.price || 0),
-    oldPrice: Number(product.oldPrice || product.price || 0),
-    rating: Number(product.rating || 4.8),
-    badge: product.badge || 'مميز',
-    description: product.description || 'منتج فاخر من متجر المصري.',
-    ingredients: Array.isArray(product.ingredients) ? product.ingredients : [],
-    weight: product.weight || '1 كغ',
-    featured: Boolean(product.featured),
-    bestSeller: Boolean(product.bestSeller),
-    images: Array.isArray(product.images) && product.images.length
-      ? product.images
-      : ['https://images.unsplash.com/photo-1551024601-bec78aea704b?auto=format&fit=crop&w=900&q=80']
-  };
-}
+import {
+  collection,
+  getDocs,
+  query,
+  where
+} from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
-function normalizeOffer(offer) {
-  return {
-    ...offer,
-    id: Number(offer.id || Date.now()),
-    title: offer.title || 'عرض مميز',
-    description: offer.description || 'عرض خاص من متجر المصري.',
-    discount: Number(offer.discount || 0),
-    price: Number(offer.price || 0),
-    showOnHome: Boolean(offer.showOnHome),
-    homeTitle: offer.homeTitle || offer.title || 'عرض مميز',
-    homeDescription: offer.homeDescription || offer.description || 'عرض خاص من متجر المصري.',
-    buttonText: offer.buttonText || 'عرض المزيد',
-    buttonLink: offer.buttonLink || 'offers.html',
-    images: Array.isArray(offer.images) ? offer.images : []
-  };
-}
+import {
+  adminListProducts,
+  adminListOffers,
+  adminListReviews,
+  adminCreateProduct,
+  adminUpdateProduct,
+  adminDeleteProduct,
+  adminCreateOffer,
+  adminUpdateOffer,
+  adminDeleteOffer,
+  adminUpdateReview,
+  adminDeleteReview,
+  adminUpsertSettings
+} from './admin-firestore-client.js';
 
-function getAdminState() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(adminStorageKey) || 'null');
-    if (saved) {
-      return {
-        ...saved,
-        products: (saved.products || []).map(normalizeAdminProduct),
-        categories: Array.isArray(saved.categories) ? saved.categories : defaultAdminState.categories,
-        offers: Array.isArray(saved.offers) ? saved.offers.map(normalizeOffer) : [],
-        reviews: Array.isArray(saved.reviews) ? saved.reviews : [],
-        settings: saved.settings || defaultAdminState.settings
-      };
-    }
-  } catch (error) {
-    console.warn('Unable to read admin state', error);
-  }
-  return JSON.parse(JSON.stringify(defaultAdminState));
-}
+const DEFAULT_CATEGORIES = ['شرقية', 'غربية', 'تورتات', 'جاتوه', 'كيك', 'هدايا', 'عروض'];
 
-function saveAdminState(state) {
-  const normalizedState = {
-    ...state,
-    products: (state.products || []).map(normalizeAdminProduct),
-    categories: Array.isArray(state.categories) ? state.categories : defaultAdminState.categories,
-    offers: Array.isArray(state.offers) ? state.offers.map(normalizeOffer) : [],
-    reviews: Array.isArray(state.reviews) ? state.reviews : [],
-    settings: state.settings || defaultAdminState.settings
-  };
-  localStorage.setItem(adminStorageKey, JSON.stringify(normalizedState));
-  window.dispatchEvent(new Event('admin-data-updated'));
-  return normalizedState;
-}
+const PRODUCTS_COL = 'products';
+const OFFERS_COL = 'offers';
+const REVIEWS_COL = 'reviews';
+const SETTINGS_COL = 'settings';
 
+// =========================
+// UI helpers
+// =========================
 function showToast(message, type = 'success') {
   Swal.fire({ title: message, icon: type, timer: 1800, showConfirmButton: false });
 }
 
+function safeText(value) {
+  return String(value ?? '').replaceAll('"', '"');
+}
+
+function setPanelVisible(visible) {
+  const panel = document.getElementById('admin-panel');
+  const loginWrap = document.getElementById('admin-login');
+  if (panel) panel.style.display = visible ? 'block' : 'none';
+  if (loginWrap) loginWrap.style.display = visible ? 'none' : 'block';
+}
+
+// =========================
+// State
+// =========================
+let categories = [...DEFAULT_CATEGORIES];
+let products = [];
+let offers = [];
+let reviews = [];
+
+let currentUser = null;
+
+// =========================
+// Fetch
+// =========================
+async function fetchAll() {
+  // Products/Offers/Reviews are full lists; we filter in render.
+  products = await adminListProducts().catch(() => []);
+  offers = await adminListOffers().catch(() => []);
+  reviews = await adminListReviews().catch(() => []);
+
+  const catsFromProducts = Array.from(new Set(products.map((p) => p.category).filter(Boolean)));
+  categories = Array.from(new Set([...DEFAULT_CATEGORIES, ...catsFromProducts]));
+
+  renderDashboard();
+  renderProducts();
+  renderCategories();
+  renderOffers();
+  renderReviews();
+  await renderSettings();
+}
+
+async function renderSettings() {
+  // We use read from Firestore directly (client rules must allow read if needed)
+  try {
+    const snap = await getDocs(collection(db, SETTINGS_COL));
+    if (!snap.empty) {
+      const first = snap.docs[0];
+      const s = first.data() || {};
+      const whatsapp = document.getElementById('whatsapp-number');
+      const logo = document.getElementById('site-logo');
+      const banner = document.getElementById('banner-text');
+      if (whatsapp) whatsapp.value = s.whatsapp || '';
+      if (logo) logo.value = s.logo || '';
+      if (banner) banner.value = s.banner || '';
+    }
+  } catch (e) {
+    console.warn('Unable to render settings', e);
+  }
+}
+
+// =========================
+// Render
+// =========================
 function renderDashboard() {
-  const state = getAdminState();
-  const approvedReviews = state.reviews.filter((review) => review.approved).length;
+  const statsProducts = document.getElementById('stats-products');
+  const statsCategories = document.getElementById('stats-categories');
+  const statsPopular = document.getElementById('stats-popular');
+  const statsReviews = document.getElementById('stats-reviews');
+
+  const approvedReviews = reviews.filter((r) => r.approved).length;
   const popularProduct =
-    state.products.find((product) => product.bestSeller) ||
-    state.products.reduce((best, product) => (product.rating > best.rating ? product : best), state.products[0] || { name: 'لا يوجد', rating: 0 });
+    products.find((p) => p.bestSeller) ||
+    products.reduce((best, p) => (p.rating > (best.rating || 0) ? p : best), products[0] || { name: 'لا يوجد', rating: 0 });
 
-  const productsCount = document.getElementById('stats-products');
-  const categoriesCount = document.getElementById('stats-categories');
-  const popularText = document.getElementById('stats-popular');
-  const reviewsCount = document.getElementById('stats-reviews');
-
-  if (productsCount) productsCount.textContent = state.products.length;
-  if (categoriesCount) categoriesCount.textContent = state.categories.length;
-  if (popularText) popularText.textContent = popularProduct?.name || 'لا يوجد';
-  if (reviewsCount) reviewsCount.textContent = approvedReviews;
+  if (statsProducts) statsProducts.textContent = products.length;
+  if (statsCategories) statsCategories.textContent = categories.length;
+  if (statsPopular) statsPopular.textContent = popularProduct?.name || 'لا يوجد';
+  if (statsReviews) statsReviews.textContent = approvedReviews;
 }
 
 function populateCategorySelects() {
-  const state = getAdminState();
-  const selectElements = [document.getElementById('product-category-select'), document.getElementById('product-edit-category-select')];
+  const selectElements = [
+    document.getElementById('product-category-select'),
+    document.getElementById('product-edit-category-select')
+  ];
 
   selectElements.forEach((select) => {
     if (!select) return;
     const currentValue = select.value;
-    select.innerHTML = state.categories.map((category) => `<option value="${category}">${category}</option>`).join('');
-    if (currentValue) {
-      select.value = currentValue;
-    }
+    select.innerHTML = categories.map((category) => `<option value="${category}">${category}</option>`).join('');
+    if (currentValue) select.value = currentValue;
   });
 }
 
 function renderProducts() {
-  const state = getAdminState();
   const tbody = document.getElementById('products-table');
   if (!tbody) return;
 
-  tbody.innerHTML = state.products
+  tbody.innerHTML = products
     .map(
       (product, index) => `
     <tr>
       <td>${index + 1}</td>
-      <td>${product.name}</td>
-      <td>${product.category}</td>
-      <td>${product.price}</td>
-      <td>${product.badge}</td>
+      <td>${safeText(product.name)}</td>
+      <td>${safeText(product.category)}</td>
+      <td>${product.price ?? ''}</td>
+      <td>${safeText(product.badge)}</td>
       <td>
-        <button class="btn btn-sm btn-outline-secondary" onclick="editProduct(${product.id})">تعديل</button>
-        <button class="btn btn-sm btn-outline-danger" onclick="deleteProduct(${product.id})">حذف</button>
+        <button class="btn btn-sm btn-outline-secondary" onclick="editProduct('${product.id}')">تعديل</button>
+        <button class="btn btn-sm btn-outline-danger" onclick="deleteProduct('${product.id}')">حذف</button>
       </td>
     </tr>
   `
@@ -196,15 +161,15 @@ function renderProducts() {
 }
 
 function renderCategories() {
-  const state = getAdminState();
   const list = document.getElementById('categories-list');
   if (!list) return;
 
-  list.innerHTML = state.categories
+  // ملاحظة: حذف التصنيف من الواجهة لن يزيل من Firestore تلقائيًا (لتجنب تعقيد). فقط نحافظ على UI.
+  list.innerHTML = categories
     .map(
       (category) => `
     <li class="list-group-item d-flex justify-content-between align-items-center">
-      ${category}
+      ${safeText(category)}
       <button class="btn btn-sm btn-outline-danger" onclick="deleteCategory('${category}')">حذف</button>
     </li>
   `
@@ -215,21 +180,20 @@ function renderCategories() {
 }
 
 function renderOffers() {
-  const state = getAdminState();
   const list = document.getElementById('offers-list');
   if (!list) return;
 
-  list.innerHTML = state.offers
+  list.innerHTML = offers
     .map(
       (offer) => `
     <li class="list-group-item d-flex justify-content-between align-items-center gap-2">
       <div>
-        <strong>${offer.title}</strong>
-        <div class="small text-muted">${offer.discount}% • ${offer.showOnHome ? 'ظاهر في الصفحة الرئيسية' : 'مخفي من الرئيسية'}</div>
+        <strong>${safeText(offer.title)}</strong>
+        <div class="small text-muted">${offer.discount ?? 0}% • ${offer.showOnHome ? 'ظاهر في الصفحة الرئيسية' : 'مخفي من الرئيسية'}</div>
       </div>
       <div class="d-flex gap-2">
-        <button class="btn btn-sm btn-outline-secondary" onclick="editOffer(${offer.id})">تعديل</button>
-        <button class="btn btn-sm btn-outline-danger" onclick="deleteOffer(${offer.id})">حذف</button>
+        <button class="btn btn-sm btn-outline-secondary" onclick="editOffer('${offer.id}')">تعديل</button>
+        <button class="btn btn-sm btn-outline-danger" onclick="deleteOffer('${offer.id}')">حذف</button>
       </div>
     </li>
   `
@@ -237,20 +201,16 @@ function renderOffers() {
     .join('');
 }
 
-function safeText(value) {
-  return String(value ?? '').replaceAll('"', '"');
-}
-
 function renderReviews() {
-  const state = getAdminState();
   const list = document.getElementById('reviews-list');
   if (!list) return;
 
-  list.innerHTML = state.reviews
+  list.innerHTML = reviews
     .map((review) => {
       const productLine = review.productName ? `<div class="small text-muted mt-2">${safeText(review.productName)}</div>` : '';
       const orderLine = review.orderRef ? `<div class="small text-muted">مرجع الطلب: ${safeText(review.orderRef)}</div>` : '';
       const dateLine = review.createdAt ? `<div class="small text-muted">${new Date(review.createdAt).toLocaleDateString('ar-EG')}</div>` : '';
+
       return `
         <li class="list-group-item">
           <div class="d-flex justify-content-between">
@@ -262,9 +222,9 @@ function renderReviews() {
           ${orderLine}
           ${dateLine}
           <div class="d-flex gap-2">
-            <button class="btn btn-sm btn-outline-success" onclick="approveReview(${review.id})">قبول</button>
-            <button class="btn btn-sm btn-outline-warning" onclick="rejectReview(${review.id})">رفض</button>
-            <button class="btn btn-sm btn-outline-danger" onclick="deleteReview(${review.id})">حذف</button>
+            <button class="btn btn-sm btn-outline-success" onclick="approveReview('${review.id}')">قبول</button>
+            <button class="btn btn-sm btn-outline-warning" onclick="rejectReview('${review.id}')">رفض</button>
+            <button class="btn btn-sm btn-outline-danger" onclick="deleteReview('${review.id}')">حذف</button>
           </div>
         </li>
       `;
@@ -272,98 +232,64 @@ function renderReviews() {
     .join('');
 }
 
-
-function renderSettings() {
-  const state = getAdminState();
-  const whatsapp = document.getElementById('whatsapp-number');
-  const logo = document.getElementById('site-logo');
-  const banner = document.getElementById('banner-text');
-
-  if (whatsapp) whatsapp.value = state.settings.whatsapp;
-  if (logo) logo.value = state.settings.logo;
-  if (banner) banner.value = state.settings.banner;
-}
-
-function readImageFiles(input) {
-  const files = Array.from(input?.files || []);
-  if (!files.length) return Promise.resolve([]);
-
-  return Promise.all(
-    files.map(
-      (file) =>
-        new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        })
-    )
-  );
-}
-
+// =========================
+// CRUD - Products
+// =========================
 async function addProduct(event) {
   event.preventDefault();
-  const state = getAdminState();
   const form = event.target;
+
   const category = form.elements.category.value.trim();
+  const name = form.elements.name.value.trim();
 
-  if (!category) {
-    showToast('يرجى اختيار تصنيف', 'error');
-    return;
-  }
+  if (!category) return showToast('يرجى اختيار تصنيف', 'error');
+  if (!name) return showToast('يرجى إدخال اسم المنتج', 'error');
 
-  if (!state.categories.includes(category)) {
-    state.categories.push(category);
-  }
+  const files = form.elements.imageFiles?.files;
+  const images = await readImageFiles(files);
 
-  const images = await readImageFiles(form.elements.imageFiles);
-
-  const product = {
-    id: Date.now(),
-    name: form.elements.name.value.trim(),
+  const payload = {
+    name,
     category,
     price: Number(form.elements.price.value || 0),
     oldPrice: Number(form.elements.oldPrice.value || form.elements.price.value || 0),
     rating: Number(form.elements.rating.value || 4.8),
     badge: form.elements.badge.value.trim() || 'مميز',
-    description: form.elements.description.value.trim() || 'منتج فاخر من متجر المصري.',
-    ingredients: form.elements.ingredients.value.split(',').map((item) => item.trim()).filter(Boolean),
     weight: form.elements.weight.value.trim() || '1 كغ',
-    featured: form.elements.featured.checked,
-    bestSeller: form.elements.bestSeller.checked,
+    description: form.elements.description.value.trim() || 'منتج فاخر من متجر المصري.',
+    ingredients: form.elements.ingredients.value.split(',').map((x) => x.trim()).filter(Boolean),
+    featured: !!form.elements.featured.checked,
+    bestSeller: !!form.elements.bestSeller.checked,
     images: images.length ? images : ['https://images.unsplash.com/photo-1551024601-bec78aea704b?auto=format&fit=crop&w=900&q=80']
   };
 
-  state.products.push(product);
-  saveAdminState(state);
+  await adminCreateProduct(payload);
 
-  renderDashboard();
-  renderProducts();
-  renderCategories();
+  if (!categories.includes(category)) categories.push(category);
+  await fetchAll();
 
   form.reset();
   showToast('تمت إضافة المنتج');
 }
 
 function editProduct(id) {
-  const state = getAdminState();
-  const product = state.products.find((item) => item.id === id);
+  const product = products.find((p) => p.id === id || String(p.id) === String(id));
   if (!product) return;
 
   const form = document.getElementById('product-edit-form');
   if (!form) return;
 
-  form.elements.name.value = product.name;
-  form.elements.category.value = product.category;
-  form.elements.price.value = product.price;
-  form.elements.oldPrice.value = product.oldPrice;
-  form.elements.rating.value = product.rating;
-  form.elements.badge.value = product.badge;
-  form.elements.weight.value = product.weight;
-  form.elements.description.value = product.description;
-  form.elements.ingredients.value = product.ingredients.join(', ');
-  form.elements.featured.checked = product.featured;
-  form.elements.bestSeller.checked = product.bestSeller;
+  form.elements.name.value = product.name || '';
+  form.elements.category.value = product.category || '';
+  form.elements.price.value = product.price ?? '';
+  form.elements.oldPrice.value = product.oldPrice ?? '';
+  form.elements.rating.value = product.rating ?? '';
+  form.elements.badge.value = product.badge ?? '';
+  form.elements.weight.value = product.weight ?? '';
+  form.elements.description.value = product.description ?? '';
+  form.elements.ingredients.value = Array.isArray(product.ingredients) ? product.ingredients.join(', ') : '';
+  form.elements.featured.checked = !!product.featured;
+  form.elements.bestSeller.checked = !!product.bestSeller;
 
   form.dataset.editId = id;
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -371,251 +297,215 @@ function editProduct(id) {
 
 async function updateProduct(event) {
   event.preventDefault();
-  const state = getAdminState();
   const form = event.target;
-  const id = Number(form.dataset.editId);
+  const id = form.dataset.editId;
 
-  const product = state.products.find((item) => item.id === id);
-  if (!product) return;
+  if (!id) return;
+
+  const images = await readImageFiles(form.elements.imageFiles?.files);
 
   const category = form.elements.category.value.trim();
-  if (!category) {
-    showToast('يرجى اختيار تصنيف', 'error');
-    return;
-  }
+  if (!category) return showToast('يرجى اختيار تصنيف', 'error');
 
-  if (!state.categories.includes(category)) {
-    state.categories.push(category);
-  }
+  const payload = {
+    name: form.elements.name.value.trim(),
+    category,
+    price: Number(form.elements.price.value || 0),
+    oldPrice: Number(form.elements.oldPrice.value || form.elements.price.value || 0),
+    rating: Number(form.elements.rating.value || 4.8),
+    badge: form.elements.badge.value.trim() || 'مميز',
+    weight: form.elements.weight.value.trim() || '1 كغ',
+    description: form.elements.description.value.trim() || 'منتج فاخر من متجر المصري.',
+    ingredients: form.elements.ingredients.value
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+    featured: !!form.elements.featured.checked,
+    bestSeller: !!form.elements.bestSeller.checked,
+    images: images.length ? images : (products.find((p) => p.id === id)?.images || [])
+  };
 
-  const images = await readImageFiles(form.elements.imageFiles);
+  await adminUpdateProduct(id, payload);
 
-  state.products = state.products.map((item) =>
-    item.id === id
-      ? {
-          ...item,
-          name: form.elements.name.value.trim(),
-          category,
-          price: Number(form.elements.price.value || 0),
-          oldPrice: Number(form.elements.oldPrice.value || form.elements.price.value || 0),
-          rating: Number(form.elements.rating.value || 4.8),
-          badge: form.elements.badge.value.trim() || 'مميز',
-          description: form.elements.description.value.trim() || 'منتج فاخر من متجر المصري.',
-          ingredients: form.elements.ingredients.value
-            .split(',')
-            .map((string) => string.trim())
-            .filter(Boolean),
-          weight: form.elements.weight.value.trim() || '1 كغ',
-          featured: form.elements.featured.checked,
-          bestSeller: form.elements.bestSeller.checked,
-          images: images.length ? images : item.images
-        }
-      : item
-  );
-
-  saveAdminState(state);
-  renderDashboard();
-  renderProducts();
-  renderCategories();
+  if (!categories.includes(category)) categories.push(category);
+  await fetchAll();
 
   form.reset();
+  delete form.dataset.editId;
   showToast('تم تحديث المنتج');
 }
 
-function deleteProduct(id) {
-  const state = getAdminState();
-  state.products = state.products.filter((product) => product.id !== id);
-  saveAdminState(state);
-
-  renderDashboard();
-  renderProducts();
+async function deleteProduct(id) {
+  await adminDeleteProduct(id);
+  await fetchAll();
   showToast('تم حذف المنتج');
 }
 
-function addCategory(event) {
-  event.preventDefault();
-  const state = getAdminState();
-  const input = document.getElementById('category-name');
-  const category = input?.value?.trim();
-  if (!category) return;
-
-  if (!state.categories.includes(category)) {
-    state.categories.push(category);
-  }
-
-  saveAdminState(state);
-  renderCategories();
-  if (input) input.value = '';
-  showToast('تمت إضافة التصنيف');
-}
-
+// =========================
+// CRUD - Categories (UI only)
+// =========================
 function deleteCategory(name) {
-  const state = getAdminState();
-  state.categories = state.categories.filter((category) => category !== name);
-  saveAdminState(state);
+  categories = categories.filter((c) => c !== name);
   renderCategories();
-  showToast('تم حذف التصنيف');
+  showToast('تم حذف التصنيف من القائمة', 'warning');
 }
 
+// =========================
+// CRUD - Offers
+// =========================
 function editOffer(id) {
-  const state = getAdminState();
-  const offer = state.offers.find((item) => item.id === id);
+  const offer = offers.find((o) => o.id === id);
   if (!offer) return;
 
   const form = document.getElementById('offer-form');
   if (!form) return;
 
-  form.elements.title.value = offer.title;
-  form.elements.description.value = offer.description;
-  form.elements.discount.value = offer.discount;
-  form.elements.price.value = offer.price || '';
-  form.elements.showOnHome.checked = offer.showOnHome;
-  form.elements.homeTitle.value = offer.homeTitle || offer.title;
-  form.elements.homeDescription.value = offer.homeDescription || offer.description;
-  form.elements.buttonText.value = offer.buttonText || 'عرض المزيد';
+  form.elements.title.value = offer.title || '';
+  form.elements.description.value = offer.description || '';
+  form.elements.discount.value = offer.discount ?? 0;
+  form.elements.price.value = offer.price ?? '';
+  form.elements.showOnHome.checked = !!offer.showOnHome;
+  form.elements.homeTitle.value = offer.homeTitle || offer.title || '';
+  form.elements.homeDescription.value = offer.homeDescription || offer.description || '';
+  form.elements.buttonText.value = offer.buttonText || '';
 
   form.dataset.editId = id;
   form.querySelector('button') && (form.querySelector('button').textContent = 'تحديث العرض');
-
-  // file input: لن نعبّيه (security)، سنحتفظ بالصور القديمة عند التحديث لو لم يتم رفع جديد.
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 async function addOffer(event) {
   event.preventDefault();
-  const state = getAdminState();
   const form = event.target;
 
-  const images = await readImageFiles(form.elements.offerImageFiles);
+  const images = await readImageFiles(form.elements.offerImageFiles?.files);
 
   const isEdit = Boolean(form.dataset.editId);
-  const editId = Number(form.dataset.editId);
+  const editId = form.dataset.editId;
 
-  const existing = isEdit ? state.offers.find((o) => o.id === editId) : null;
-  const prevImages = Array.isArray(existing?.images) ? existing.images : [];
+  const prev = isEdit ? offers.find((o) => o.id === editId) : null;
 
-  const offerData = {
-    id: editId || Date.now(),
+  const payload = {
     title: form.elements.title.value.trim(),
     description: form.elements.description.value.trim(),
     discount: Number(form.elements.discount.value || 0),
     price: Number(form.elements.price.value || 0),
-    showOnHome: form.elements.showOnHome.checked,
+    showOnHome: !!form.elements.showOnHome.checked,
     homeTitle: form.elements.homeTitle.value.trim() || form.title.value.trim(),
     homeDescription: form.elements.homeDescription.value.trim() || form.description.value.trim(),
     buttonText: form.elements.buttonText.value.trim() || 'عرض المزيد',
-    images: images.length ? images : prevImages
+    images: images.length ? images : (prev?.images || [])
   };
 
   if (isEdit) {
-    state.offers = state.offers.map((offer) => (offer.id === editId ? offerData : offer));
+    await adminUpdateOffer(editId, payload);
     showToast('تم تحديث العرض');
   } else {
-    state.offers.push(offerData);
+    await adminCreateOffer(payload);
     showToast('تمت إضافة العرض');
   }
 
-  saveAdminState(state);
-  renderOffers();
+  await fetchAll();
+
   form.reset();
   delete form.dataset.editId;
-  if (form.querySelector('button')) form.querySelector('button').textContent = 'إضافة عرض';
+  const btn = form.querySelector('button');
+  if (btn) btn.textContent = 'إضافة عرض';
 }
 
-function deleteOffer(id) {
-  const state = getAdminState();
-  state.offers = state.offers.filter((offer) => offer.id !== id);
-  saveAdminState(state);
-  renderOffers();
+async function deleteOffer(id) {
+  await adminDeleteOffer(id);
+  await fetchAll();
   showToast('تم حذف العرض');
 }
 
-function approveReview(id) {
-  const state = getAdminState();
-  state.reviews = state.reviews.map((review) => (review.id === id ? { ...review, approved: true } : review));
-  saveAdminState(state);
-  renderReviews();
+// =========================
+// Reviews approved workflow
+// =========================
+async function approveReview(id) {
+  await adminUpdateReview(id, { approved: true });
+  await fetchAll();
   showToast('تم قبول التقييم');
 }
 
-function rejectReview(id) {
-  const state = getAdminState();
-  state.reviews = state.reviews.map((review) => (review.id === id ? { ...review, approved: false } : review));
-  saveAdminState(state);
-  renderReviews();
+async function rejectReview(id) {
+  await adminUpdateReview(id, { approved: false });
+  await fetchAll();
   showToast('تم رفض التقييم');
 }
 
-function deleteReview(id) {
-  const state = getAdminState();
-  state.reviews = state.reviews.filter((review) => review.id !== id);
-  saveAdminState(state);
-  renderReviews();
+async function deleteReview(id) {
+  await adminDeleteReview(id);
+  await fetchAll();
   showToast('تم حذف التقييم');
 }
 
-function saveSettings(event) {
+// =========================
+// Settings
+// =========================
+async function saveSettings(event) {
   event.preventDefault();
-  const state = getAdminState();
-  state.settings = {
+
+  const payload = {
     whatsapp: document.getElementById('whatsapp-number').value,
     logo: document.getElementById('site-logo').value,
     banner: document.getElementById('banner-text').value
   };
-  saveAdminState(state);
+
+  await adminUpsertSettings(payload);
+  await fetchAll();
   showToast('تم حفظ الإعدادات');
 }
 
+// =========================
+// Login via Firebase Auth
+// =========================
 function initAdminLogin() {
   const loginForm = document.getElementById('admin-login-form');
   if (!loginForm) return;
 
-  loginForm.addEventListener('submit', (event) => {
+  loginForm.addEventListener('submit', async (event) => {
     event.preventDefault();
 
-    const emailInput = document.getElementById('admin-email');
-    const passwordInput = document.getElementById('admin-password');
-    const email = emailInput?.value?.trim()?.toLowerCase();
-    const password = passwordInput?.value?.trim();
+    const email = document.getElementById('admin-email').value.trim();
+    const password = document.getElementById('admin-password').value.trim();
 
-    const validCredentials = [['admin@elmsry.com', '01011001128']];
-    const isValid = validCredentials.some(([validEmail, validPassword]) => email === validEmail && password === validPassword);
-
-    if (isValid) {
-      localStorage.setItem('almasry-admin-auth', 'true');
-      window.location.reload();
-    } else {
-      Swal.fire({
-        icon: 'error',
-        title: 'بيانات غير صحيحة',
-        text: `البريد: ${email || 'غير مدخل'} | كلمة المرور: ${password || 'غير مدخل'}`
-      });
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      showToast('تم تسجيل الدخول');
+    } catch (e) {
+      console.warn(e);
+      Swal.fire({ icon: 'error', title: 'فشل تسجيل الدخول', text: e?.message || 'تحقق من البريد/كلمة المرور' });
     }
   });
 }
 
-function initAdminPanel() {
-  if (!localStorage.getItem('almasry-admin-auth')) {
-    const panel = document.getElementById('admin-panel');
-    const login = document.getElementById('admin-login');
-    if (panel) panel.style.display = 'none';
-    if (login) login.style.display = 'block';
-    return;
-  }
-
-  const panel = document.getElementById('admin-panel');
-  const login = document.getElementById('admin-login');
-  if (panel) panel.style.display = 'block';
-  if (login) login.style.display = 'none';
-
-  renderDashboard();
-  renderProducts();
-  renderCategories();
-  renderOffers();
-  renderReviews();
-  renderSettings();
+function initLogout() {
+  const logoutBtn = document.getElementById('logout-btn');
+  if (!logoutBtn) return;
+  logoutBtn.addEventListener('click', async () => {
+    await signOut(auth);
+    window.location.reload();
+  });
 }
 
+function initAuthGate() {
+  onAuthStateChanged(auth, async (user) => {
+    currentUser = user;
+    if (!user) {
+      setPanelVisible(false);
+      return;
+    }
+    setPanelVisible(true);
+
+    // Verify admin claim is handled by rules; if user isn't admin, writes will fail.
+    await fetchAll();
+  });
+}
+
+// =========================
+// Pending Orders (still local)
+// =========================
 function loadPendingOrders() {
   try {
     const key = 'almasry-orders-pending';
@@ -624,11 +514,6 @@ function loadPendingOrders() {
   } catch {
     return [];
   }
-}
-
-function getProductById(id) {
-  const state = getAdminState();
-  return state.products.find((p) => p.id === Number(id));
 }
 
 function renderPendingOrdersUI() {
@@ -655,20 +540,16 @@ function renderPendingOrdersUI() {
       .map((it) => ({ productId: it.productId, label: it.title || String(it.productId) }));
 
     const unique = Array.from(new Map(productLines.map((p) => [String(p.productId), p])).values());
-
-    // نحافظ على التوافق مع واجهة select[multiple] (اختيار بالماوس Ctrl/Shift)
-    // لكن لنفسل خيار "mربع علامة صح": نعرضها بطريقتين
-    // 1) نجعل select متعدد (multiple)
-    // 2) سننشئ checkboxes فوقه داخل UI.
-    // ملاحظة: renderPendingOrdersUI سيقوم بإنشاء الـ checkboxes.
-    productSelect.innerHTML = unique.length ? unique.map((p) => `<option value="${p.productId}">${p.label}</option>`).join('') : '<option value="">لا يوجد منتج قابل للتقييم</option>';
+    productSelect.innerHTML = unique.length
+      ? unique.map((p) => `<option value="${p.productId}">${p.label}</option>`).join('')
+      : '<option value="">لا يوجد منتج قابل للتقييم</option>';
   }
 
   renderProductsForSelectedOrder();
   orderSelect.addEventListener('change', renderProductsForSelectedOrder);
 }
 
-function submitPendingReview() {
+async function submitPendingReview() {
   const orderSelect = document.getElementById('pending-order-select');
   const productSelect = document.getElementById('pending-order-product-select');
   const nameInput = document.getElementById('pending-reviewer-name');
@@ -685,55 +566,18 @@ function submitPendingReview() {
     return;
   }
 
-  const selectedProductIds = Array.from(
-    productSelect.selectedOptions || []
-  ).map((opt) => opt.value).filter(Boolean);
-
+  const selectedProductIds = Array.from(productSelect.selectedOptions || []).map((opt) => opt.value).filter(Boolean);
   if (!selectedProductIds.length) {
     showToast('اختر منتج من الطلب', 'error');
     return;
   }
 
-  // إنشاء تقييم منفصل لكل منتج محدد داخل نفس الطلب.
-  // (لأن واجهة الطلب يسمح باختيار أكثر من منتج)
   const productLines = selectedProductIds.map((productId) => {
-    const product = getProductById(productId);
-    return {
-      productId: Number(productId),
-      productName: product?.name || 'منتج'
-    };
+    const product = products.find((p) => String(p.id) === String(productId));
+    return { productId: Number(productId), productName: product?.name || 'منتج' };
   });
 
-  // إذا أكثر من منتج: سنحتفظ بكلهم في نص واحد
   const joinedProductNames = productLines.map((l) => l.productName).join('، ');
-
-
-
-  const state = getAdminState();
-
-  // إذا اختار أكثر من منتج: ننشئ لكل منتج تقييم مستقل.
-  // المطلوب: كل المنتجات المختارة تظل في تعليق واحد (تعليق واحد فقط)
-  // وفي نفس الوقت نخزن على الأقل productId واحد للتوافق مع باقي النظام.
-  const firstLine = productLines[0];
-  const createdReviews = [
-    {
-      id: Date.now() + Math.floor(Math.random() * 100000),
-      name: (nameInput.value || '').trim() || 'عميلنا المميز',
-      text: `${(textInput.value || '').trim() || ''}${joinedProductNames ? `\n\n(منتجات التقييم: ${joinedProductNames})` : ''}`,
-
-      approved: false,
-      productId: Number(firstLine.productId),
-      productName: firstLine.productName,
-      // تخزين قائمة المنتجات المختارة (اختياري لكن يفيد عند العرض لاحقاً)
-      productIds: productLines.map((l) => Number(l.productId)),
-      productNames: productLines.map((l) => l.productName),
-      orderRef: order.orderRef,
-      createdAt: new Date().toISOString(),
-      rating: Number(ratingInput?.value || 4.8)
-    }
-  ];
-
-
 
   const reviewText = (textInput.value || '').trim();
   if (!reviewText) {
@@ -741,40 +585,104 @@ function submitPendingReview() {
     return;
   }
 
+  // Create review docs for each selected product (as in your earlier design it stores one doc).
+  // We'll store one review doc with productIds arrays like before.
+  const firstLine = productLines[0];
 
-  // إضافة التقييمات (واحد لكل منتج مختار)
-  state.reviews = Array.isArray(state.reviews) ? state.reviews : [];
-  state.reviews.push(...createdReviews);
-  saveAdminState(state);
+  const payload = {
+    name: (nameInput.value || '').trim() || 'عميلنا المميز',
+    text: `${reviewText}${joinedProductNames ? `\n\n(منتجات التقييم: ${joinedProductNames})` : ''}`,
+    approved: false,
+    productId: Number(firstLine.productId),
+    productName: firstLine.productName,
+    productIds: productLines.map((l) => Number(l.productId)),
+    productNames: productLines.map((l) => l.productName),
+    orderRef: order.orderRef,
+    createdAt: new Date().toISOString(),
+    rating: Number(ratingInput?.value || 4.8)
+  };
 
+  // Create in Firestore
+  // We don't have adminCreateReview helper; re-use adminCreateProduct?? not.
+  // Use addDoc directly.
+  const { addDoc } = await import("https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js");
+  await addDoc(collection(db, REVIEWS_COL), payload);
 
-  // تأكيد: لا نزيل pending order تلقائياً (للسلامة)، لكن يمكن وضع reviewed flag إن رغبت.
   showToast('تم إرسال التقييم للمراجعة');
-  if (textInput) textInput.value = '';
 
-  if (nameInput) nameInput.value = '';
-  renderReviews();
+  textInput.value = '';
+  nameInput.value = '';
+
+  await fetchAll();
+  // Keep pending order data local for now
 }
+
+// =========================
+// File inputs
+// =========================
+function readImageFiles(filesList) {
+  const files = Array.from(filesList || []);
+  if (!files.length) return Promise.resolve([]);
+
+  return Promise.all(
+    files.map(
+      (file) =>
+        new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        })
+    )
+  );
+}
+
+// =========================
+// Wiring + exports for inline onclick
+// =========================
+window.editProduct = editProduct;
+window.deleteProduct = deleteProduct;
+window.addToCart = undefined;
+window.editOffer = editOffer;
+window.deleteOffer = deleteOffer;
+window.approveReview = approveReview;
+window.rejectReview = rejectReview;
+window.deleteReview = deleteReview;
+window.deleteCategory = deleteCategory;
+
+window.addProduct = addProduct;
+window.updateProduct = updateProduct;
+window.addOffer = addOffer;
+window.saveSettings = saveSettings;
+window.submitPendingReview = submitPendingReview;
+
+// Pending review button handler uses function reference above
 
 document.addEventListener('DOMContentLoaded', () => {
   initAdminLogin();
-  initAdminPanel();
+  initLogout();
+  initAuthGate();
 
   document.getElementById('product-form')?.addEventListener('submit', addProduct);
   document.getElementById('product-edit-form')?.addEventListener('submit', updateProduct);
-  document.getElementById('category-form')?.addEventListener('submit', addCategory);
+  document.getElementById('category-form')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const input = document.getElementById('category-name');
+    const category = input?.value?.trim();
+    if (!category) return;
+    if (!categories.includes(category)) categories.push(category);
+    renderCategories();
+    input.value = '';
+    showToast('تمت إضافة التصنيف');
+  });
   document.getElementById('offer-form')?.addEventListener('submit', addOffer);
   document.getElementById('settings-form')?.addEventListener('submit', saveSettings);
 
-  // Pending Orders UI
   renderPendingOrdersUI();
   document.getElementById('submit-pending-review-btn')?.addEventListener('click', submitPendingReview);
-
-  populateCategorySelects();
 
   if (typeof AOS !== 'undefined' && AOS.init) {
     AOS.init({ duration: 800, once: true });
   }
 });
-
 
