@@ -569,31 +569,67 @@ function initProductsPage() {
         button.addEventListener("click", () => {
           currentPage = Number(button.dataset.page);
           applyFilters();
+          // Smooth scroll بعد إعادة رسم المنتجات (مهم للـ Pagination)
+          requestAnimationFrame(() => {
+            smoothScrollToProducts();
+          });
         });
+
       });
     }
   }
+
+  const productsAnchor = document.getElementById("products-grid");
+  const focusTarget = productsAnchor || grid;
+
+  function smoothScrollToProducts() {
+    if (!focusTarget) return;
+    // منع القفزات: استخدم scrollIntoView مع block-start وتفعيل behavior smooth فقط
+    try {
+      focusTarget.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch {
+      // fallback
+      window.scrollTo({ top: focusTarget.offsetTop, behavior: "smooth" });
+    }
+  }
+
+  // تحسين الاستجابة للـ input (debounce بسيط)
+  let searchTimer = null;
 
   filterButtons.forEach((button) => {
     button.addEventListener("click", () => {
       currentCategory = button.dataset.category;
       currentPage = 1;
-      filterButtons.forEach((item) => item.classList.toggle("active", item === button));
+      filterButtons.forEach((item) =>
+        item.classList.toggle("active", item === button),
+      );
       applyFilters();
+      smoothScrollToProducts();
+      // دعم لوحة المفاتيح: نقل focus بدون تعطيل المستخدم
+      focusTarget?.focus?.({ preventScroll: true });
     });
   });
 
   searchInput?.addEventListener("input", () => {
-    currentPage = 1;
-    applyFilters();
+    if (searchTimer) clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      currentPage = 1;
+      applyFilters();
+      smoothScrollToProducts();
+      focusTarget?.focus?.({ preventScroll: true });
+    }, 220);
   });
+
   sortSelect?.addEventListener("change", () => {
     currentPage = 1;
     applyFilters();
+    smoothScrollToProducts();
+    focusTarget?.focus?.({ preventScroll: true });
   });
 
   applyFilters();
 }
+
 
 async function initProductDetail() {
   const productId = new URLSearchParams(window.location.search).get("id");
