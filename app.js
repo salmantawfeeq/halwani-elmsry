@@ -7,7 +7,9 @@ import {
   query,
   where,
   orderBy,
+  startAfter,
   limit,
+  endBefore,
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
 // Firestore collections
@@ -20,6 +22,10 @@ const SETTINGS_COL = "settings";
 // Runtime state
 // =========================
 let products = [];
+let productsCache = {
+  // pageKey: { items: [], lastDoc: doc, firstDoc: doc }
+};
+let lastVisibleDoc = null;
 let offers = [];
 let settings = null;
 
@@ -78,17 +84,11 @@ function normalizeOffer(o) {
 
 function getCartItems() {
   return cart
-    .map((entry) => {
-      if (entry.type === "offer") {
-        return { type: "offer", item: entry, qty: entry.qty };
-      }
-
-      // products.id is String now
-      const product = products.find((p) => String(p.id) === String(entry.id));
-      return product
-        ? { type: "product", item: product, qty: entry.qty }
-        : null;
-    })
+    .map((item) => ({
+      type: item.type,
+      item: item, // The full item is now stored in the cart
+      qty: item.qty,
+    }))
     .filter(Boolean);
 }
 
@@ -109,12 +109,12 @@ async function loadCollectionAsArray(colName) {
   return items;
 }
 
-async function loadProducts() {
-  const items = await loadCollectionAsArray(PRODUCTS_COL);
-  return items.map((p) => {
-    const stringId = String(p.docId ?? p.id);
-    return normalizeProduct({ ...p, id: stringId });
-  });
+async function loadSettings() {
+  const settingsCol = collection(db, SETTINGS_COL);
+  const snap = await getDocs(settingsCol);
+  if (snap.empty) return null;
+  const first = snap.docs[0];
+  return { id: first.id, ...first.data() };
 }
 
 async function loadOffers() {
@@ -123,14 +123,6 @@ async function loadOffers() {
     const numericId = Number(o.docId ?? o.id);
     return normalizeOffer({ ...o, id: numericId });
   });
-}
-
-async function loadSettings() {
-  const settingsCol = collection(db, SETTINGS_COL);
-  const snap = await getDocs(settingsCol);
-  if (snap.empty) return null;
-  const first = snap.docs[0];
-  return { id: first.id, ...first.data() };
 }
 
 async function loadApprovedReviews() {
@@ -149,23 +141,28 @@ async function loadApprovedReviews() {
 }
 
 async function syncFirestore() {
-  const [p, o, s, r] = await Promise.all([
-    loadProducts().catch(() => []),
+  // We no longer load all products upfront.
+  const [o, s, r] = await Promise.all([
     loadOffers().catch(() => []),
     loadSettings().catch(() => null),
     loadApprovedReviews().catch(() => []),
   ]);
 
-  products = p;
   offers = o;
   settings = s;
 
-  if (document.getElementById("featured-products")) initHomePage();
+  // Page-specific initializations
+  if (document.getElementById("featured-products")) initHomePage(r);
   if (document.getElementById("homepage-offers")) renderHomeOffers();
-  if (document.getElementById("home-reviews-grid")) renderHomeReviews(r);
+  // renderHomeReviews is called from initHomePage
 
   if (document.getElementById("offers-grid")) initOffersPage();
   if (document.getElementById("products-grid")) initProductsPage();
+
+  if (
+    document.getElementById("reviews-grid") &&
+    !document.getElementById("home-reviews-grid")
+  ) initReviewsPage();
 
   if (
     document.getElementById("cart-items") &&
@@ -177,31 +174,61 @@ async function syncFirestore() {
   if (document.getElementById("product-detail")) initProductDetail();
 }
 
+function updateCartBadge() {
+  const cartLink = document.querySelector('.cart-link');
+  if (!cartLink) return;
+  const count = cart.reduce((sum, item) => sum + item.qty, 0);
+  let badge = cartLink.querySelector('.cart-badge');
+  if (!badge) {
+    badge = document.createElement('span');
+    badge.className = 'cart-badge';
+    cartLink.appendChild(badge);
+  }
+  badge.textContent = count;
+  badge.style.display = count > 0 ? 'flex' : 'none';
+}
+
 // =========================
 // Cart actions
 // =========================
-function addToCart(productId, qty = 1) {
+async function addToCart(productId, qty = 1) {
   const normalizedId = String(productId);
   if (!normalizedId || normalizedId === "undefined" || normalizedId === "null") {
     if (typeof Swal !== "undefined") {
-      Swal.fire({
-        title: "حدث خطأ",
-        text: "معرّف المنتج غير صالح",
-        icon: "error",
-        confirmButtonText: "حسناً",
-      });
+      Swal.fire({ title: "حدث خطأ", text: "معرّف المنتج غير صالح", icon: "error", confirmButtonText: "حسناً" });
     }
     return;
   }
 
-  const item = cart.find(
-    (entry) => String(entry.id) === normalizedId && entry.type !== "offer",
-  );
+  const existingCartItem = cart.find((entry) => String(entry.id) === normalizedId && entry.type === "product");
 
-  if (item) item.qty += qty;
-  else cart.push({ id: normalizedId, type: "product", qty });
+  if (existingCartItem) {
+    existingCartItem.qty += qty;
+  } else {
+    // Product not in cart, we need its details.
+    // First, check the local `products` array (from homepage, etc.)
+    let productDetails = getProductById(normalizedId);
+
+    // If not found locally, fetch from Firestore
+    if (!productDetails) {
+      const docRef = doc(db, PRODUCTS_COL, normalizedId);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        productDetails = normalizeProduct({ id: docSnap.id, ...docSnap.data() });
+      }
+    }
+
+    if (!productDetails) {
+      Swal.fire({ title: "خطأ", text: "لم يتم العثور على المنتج.", icon: "error" });
+      return;
+    }
+
+    // Add the full product details to the cart
+    cart.push({ ...productDetails, type: "product", qty });
+  }
 
   saveCart();
+  updateCartBadge();
   if (typeof Swal !== "undefined") {
     Swal.fire({
       title: "تمت الإضافة!",
@@ -212,29 +239,25 @@ function addToCart(productId, qty = 1) {
   }
 }
 
-function addOfferToCart(offerId, qty = 1) {
-  const offer = offers.find((entry) => entry.id === Number(offerId));
-  if (!offer) return;
+async function addOfferToCart(offerId, qty = 1) {
+  const offerDetails = offers.find((entry) => entry.id === Number(offerId));
+  if (!offerDetails) return;
 
-  const cartId = `offer-${offer.id}`;
-  const item = cart.find((entry) => entry.id === cartId && entry.type === "offer");
+  const cartId = `offer-${offerDetails.id}`;
+  const existingCartItem = cart.find((entry) => entry.id === cartId && entry.type === "offer");
 
-  if (item) item.qty += qty;
-  else
-    cart.push({
-      id: cartId,
-      type: "offer",
-      qty,
-      title: offer.title,
-      description: offer.description,
-      discount: Number(offer.discount || 0),
-    });
+  if (existingCartItem) {
+    existingCartItem.qty += qty;
+  } else {
+    cart.push({ ...offerDetails, id: cartId, type: "offer", qty });
+  }
 
   saveCart();
+  updateCartBadge();
   if (typeof Swal !== "undefined") {
     Swal.fire({
       title: "تمت الإضافة!",
-      text: `تمت إضافة العرض "${offer.title}" إلى السلة`,
+      text: `تمت إضافة العرض "${offerDetails.title}" إلى السلة`,
       icon: "success",
       confirmButtonText: "حسناً",
     });
@@ -243,23 +266,35 @@ function addOfferToCart(offerId, qty = 1) {
   initCartPage();
 }
 
-function changeQty(productId, delta) {
+function changeQty(cartItemId, delta) {
   cart = cart
-    .map((entry) =>
-      entry.id === productId
-        ? { ...entry, qty: Math.max(1, entry.qty + delta) }
-        : entry,
-    )
+    .map((entry) => (entry.id === cartItemId ? { ...entry, qty: Math.max(1, entry.qty + delta) } : entry))
     .filter((entry) => entry.qty > 0);
 
   saveCart();
+  updateCartBadge();
   initCartPage();
 }
 
 function removeFromCart(productId) {
-  cart = cart.filter((entry) => entry.id !== productId);
-  saveCart();
-  initCartPage();
+  Swal.fire({
+    title: 'هل أنت متأكد؟',
+    text: "سيتم حذف هذا المنتج من السلة!",
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#A7C796',
+    cancelButtonColor: '#d33',
+    confirmButtonText: 'نعم، احذفه!',
+    cancelButtonText: 'إلغاء'
+  }).then((result) => {
+    if (result.isConfirmed) {
+      cart = cart.filter((entry) => String(entry.id) !== String(productId));
+      saveCart();
+      updateCartBadge();
+      initCartPage();
+      Swal.fire('تم الحذف!', 'تم حذف المنتج من السلة.', 'success');
+    }
+  });
 }
 
 function submitOrder() {
@@ -273,8 +308,8 @@ function submitOrder() {
   const order = {
     orderRef,
     items: items.map((entry) => ({
-      type: entry.type,
-      id: entry.type === "offer" ? `offer-${entry.item.id}` : entry.item.id,
+      type: entry.item.type,
+      id: entry.item.id,
       title: entry.type === "offer" ? entry.item.title : entry.item.name,
       qty: entry.qty,
       productId: entry.type === "product" ? entry.item.id : null,
@@ -303,16 +338,36 @@ function submitOrder() {
 
   const encoded = encodeURIComponent(message);
   window.open(`https://wa.me/201011001128?text=${encoded}`, "_blank");
+
+  // Clear cart after submitting
+  cart = [];
+  saveCart();
+  updateCartBadge();
+  initCartPage();
 }
 
 // =========================
 // Render pages
 // =========================
-function renderProductCards(container, limit = null) {
+async function renderFeaturedProducts() {
+  const container = document.getElementById("featured-products");
   if (!container) return;
-  const items = limit ? products.filter((p) => p.featured).slice(0, limit) : products;
 
-  container.innerHTML = items
+  const q = query(
+    collection(db, PRODUCTS_COL),
+    where("featured", "==", true),
+    limit(3)
+  );
+  const snap = await getDocs(q);
+  const featuredProducts = [];
+  snap.forEach((d) => {
+    featuredProducts.push(normalizeProduct({ id: d.id, ...d.data() }));
+  });
+
+  // Store in global products array to help cart lookups
+  products = [...products, ...featuredProducts];
+
+  container.innerHTML = featuredProducts
     .map(
       (product) => `
     <div class="col-lg-4 col-md-6 mb-4">
@@ -344,24 +399,35 @@ function renderProductCards(container, limit = null) {
     .join("");
 }
 
-function renderBestSellers() {
+async function renderBestSellers() {
   const container = document.getElementById("best-sellers");
   if (!container) return;
 
-  const bestSellers = products.filter((product) => product.bestSeller).slice(0, 3);
+  const q = query(
+    collection(db, PRODUCTS_COL),
+    where("bestSeller", "==", true),
+    limit(3)
+  );
+  const snap = await getDocs(q);
+  const bestSellers = [];
+  snap.forEach((d) => {
+    bestSellers.push(normalizeProduct({ id: d.id, ...d.data() }));
+  });
+
+  // Store in global products array to help cart lookups
+  products = [...products, ...bestSellers];
 
   if (!bestSellers.length) {
     container.innerHTML =
       '<div class="col-12 text-center py-4"><p class="text-muted">سيظهر هنا أكثر المنتجات مبيعًا عند اختيارها من لوحة الإدارة.</p></div>';
     return;
   }
-
   container.innerHTML = bestSellers
     .map(
       (product) => `
     <div class="col-lg-4">
       <div class="product-card p-4 h-100">
-        <img src="${product.images?.[0]}" alt="${product.name}" class="w-100 mb-3" style="height:200px; object-fit:cover;" />
+        <img src="${product.images?.[0]}" alt="${product.name}" class="w-100 mb-3" style="height:200px; object-fit:cover;" loading="lazy" decoding="async" />
         <h5 class="fw-bold">${product.name}</h5>
         <p class="text-muted">${product.description}</p>
         <span class="price-current">${formatPrice(product.price)}</span>
@@ -375,10 +441,13 @@ function renderBestSellers() {
     .join("");
 }
 
-function initHomePage() {
-  renderProductCards(document.getElementById("featured-products"), 3);
-  renderBestSellers();
-  renderHomeOffers();
+async function initHomePage(reviews) {
+  await Promise.all([
+    renderFeaturedProducts(),
+    renderBestSellers(),
+    renderHomeOffers(),
+    renderHomeReviews(reviews),
+  ]);
 }
 
 function renderHomeOffers() {
@@ -397,7 +466,7 @@ function renderHomeOffers() {
       const mainImg = offer?.images?.[0];
       return `
       <div class="col-lg-6" data-aos="fade-up">
-        <div class="offer-card p-4 h-100">
+        <div class="offer-card p-4 h-100 d-flex flex-column">
           ${mainImg ? `<img src="${mainImg}" alt="${offer.homeTitle || offer.title}" class="offer-image" />` : ""}
           <h4 class="fw-bold ${mainImg ? "mt-2" : ""}">${offer.homeTitle || offer.title}</h4>
           <p>${offer.homeDescription || offer.description}</p>
@@ -416,7 +485,7 @@ function renderHomeReviews(reviews = []) {
   const container = document.getElementById("home-reviews-grid");
   if (!container) return;
 
-  const approved = reviews.filter((r) => r.approved);
+  const approved = Array.isArray(reviews) ? reviews.filter((r) => r.approved) : [];
   if (!approved.length) {
     container.innerHTML =
       '<div class="col-12 text-center py-4"><p class="text-muted">لا توجد آراء معتمدة حالياً.</p></div>';
@@ -465,7 +534,7 @@ function initOffersPage() {
       const mainImg = offer?.images?.[0];
       return `
       <div class="col-lg-4" data-aos="fade-up">
-        <div class="offer-card p-4 h-100">
+        <div class="offer-card p-4 h-100 d-flex flex-column">
           ${mainImg ? `<img src="${mainImg}" alt="${offer.title}" class="offer-image" />` : ""}
           <h4 class="mt-2">${offer.title}</h4>
           <p>${offer.description}</p>
@@ -479,7 +548,7 @@ function initOffersPage() {
     .join("");
 }
 
-function initProductsPage() {
+async function initProductsPage() {
   const grid = document.getElementById("products-grid");
   const filterBar = document.querySelector(".filter-bar");
   const searchInput = document.getElementById("search-input");
@@ -489,10 +558,16 @@ function initProductsPage() {
 
   let currentCategory = "الكل";
   let currentPage = 1;
-  const perPage = 6;
+  const perPage = 9;
 
-  const categories = ["الكل", ...Array.from(new Set(products.map((p) => p.category)))];
-
+  // Fetch categories dynamically
+  const productsRef = collection(db, PRODUCTS_COL);
+  const catSnap = await getDocs(productsRef);
+  const categories = ["الكل", ...Array.from(new Set(catSnap.docs.map(doc => doc.data().category).filter(Boolean)))];
+  
+  // Reset cache on page load
+  productsCache = {};
+  
   if (filterBar) {
     filterBar.innerHTML = categories
       .map(
@@ -505,35 +580,89 @@ function initProductsPage() {
 
   const filterButtons = document.querySelectorAll("[data-category]");
 
-  function applyFilters() {
-    const filtered = products.filter((product) => {
-      const categoryMatch = currentCategory === "الكل" || product.category === currentCategory;
-      const searchMatch =
-        product.name.includes(searchInput?.value || "") ||
-        product.description.includes(searchInput?.value || "");
-      return categoryMatch && searchMatch;
-    });
+  function renderSkeleton() {
+    if (!grid) return;
+    grid.innerHTML = Array.from({ length: perPage }, () => `
+      <div class="col-lg-4 col-md-6 mb-4 skeleton-card">
+        <div class="product-card h-100">
+          <div class="skeleton skeleton-img"></div>
+          <div class="p-4">
+            <div class="skeleton skeleton-text w-50"></div>
+            <div class="skeleton skeleton-text mt-3"></div>
+            <div class="skeleton skeleton-text w-75"></div>
+            <div class="d-flex justify-content-between align-items-center mt-3">
+              <div class="skeleton skeleton-text w-25"></div>
+              <div class="skeleton skeleton-text w-25"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
 
-    const sorted = [...filtered].sort((a, b) => {
-      if (sortSelect?.value === "price") return a.price - b.price;
-      if (sortSelect?.value === "rating") return b.rating - a.rating;
-      return 0;
-    });
+  async function applyFilters(page = 1, direction = 'next') {
+    currentPage = page;
+    const cacheKey = `${currentCategory}-${sortSelect?.value || 'default'}-${searchInput?.value || ''}-${page}`;
 
-    const pages = Math.ceil(sorted.length / perPage);
-    const start = (currentPage - 1) * perPage;
-    const pageItems = sorted.slice(start, start + perPage);
+    if (productsCache[cacheKey]) {
+      renderProductPage(productsCache[cacheKey].items);
+      lastVisibleDoc = productsCache[cacheKey].lastDoc;
+      updatePagination(page, true); // Assuming there's a next page from cache
+      return;
+    }
 
-    if (!pageItems.length) {
+    renderSkeleton();
+
+    let q = query(collection(db, PRODUCTS_COL));
+
+    // Filtering
+    if (currentCategory !== "الكل") {
+      q = query(q, where("category", "==", currentCategory));
+    }
+    const searchTerm = searchInput?.value.trim();
+    if (searchTerm) {
+      q = query(q, where('name', '>=', searchTerm), where('name', '<=', searchTerm + '\uf8ff'));
+    }
+
+    // Sorting
+    if (sortSelect?.value === "price") {
+      q = query(q, orderBy("price", "asc"));
+    } else if (sortSelect?.value === "rating") {
+      q = query(q, orderBy("rating", "desc"));
+    } else {
+      q = query(q, orderBy("name", "asc")); // Default sort for consistent pagination
+    }
+
+    // Pagination
+    if (page > 1 && lastVisibleDoc && direction === 'next') {
+      q = query(q, startAfter(lastVisibleDoc));
+    }
+    
+    q = query(q, limit(perPage));
+
+    const snap = await getDocs(q);
+    const pageItems = [];
+    snap.forEach(doc => pageItems.push(normalizeProduct({ id: doc.id, ...doc.data() })));
+
+    lastVisibleDoc = snap.docs[snap.docs.length - 1];
+
+    productsCache[cacheKey] = { items: pageItems, lastDoc: lastVisibleDoc };
+
+    renderProductPage(pageItems);
+    updatePagination(page, pageItems.length === perPage);
+  }
+
+  function renderProductPage(items) {
+    if (!items.length) {
       grid.innerHTML =
         '<div class="col-12 text-center py-5"><h5>لا توجد منتجات تطابق التصفية الحالية</h5></div>';
     } else {
-      grid.innerHTML = pageItems
+      grid.innerHTML = items
         .map(
           (product) => `
         <div class="col-lg-4 col-md-6 mb-4">
           <div class="product-card h-100">
-            <img src="${product.images[0]}" alt="${product.name}" class="w-100">
+            <img src="${product.images[0]}" alt="${product.name}" class="w-100" loading="lazy" decoding="async" fetchpriority="low">
             <div class="p-4">
               <div class="d-flex justify-content-between align-items-center mb-3">
                 <span class="badge badge-green">${product.badge}</span>
@@ -559,22 +688,28 @@ function initProductsPage() {
         )
         .join("");
     }
+  }
 
+  function updatePagination(currentPage, hasMore) {
     if (pagination) {
-      pagination.innerHTML = Array.from({ length: pages }, (_, i) => `
-        <li class="page-item ${i + 1 === currentPage ? "active" : ""}"><button class="page-link" data-page="${i + 1}">${i + 1}</button></li>
-      `).join("");
+      const prevDisabled = currentPage === 1 ? 'disabled' : '';
+      const nextDisabled = !hasMore ? 'disabled' : '';
+      pagination.innerHTML = `
+        <li class="page-item ${prevDisabled}"><button class="page-link" data-page-nav="prev">السابق</button></li>
+        <li class="page-item active"><span class="page-link">${currentPage}</span></li>
+        <li class="page-item ${nextDisabled}"><button class="page-link" data-page-nav="next">التالي</button></li>
+      `;
 
-      pagination.querySelectorAll("[data-page]").forEach((button) => {
-        button.addEventListener("click", () => {
-          currentPage = Number(button.dataset.page);
-          applyFilters();
-          // Smooth scroll بعد إعادة رسم المنتجات (مهم للـ Pagination)
-          requestAnimationFrame(() => {
-            smoothScrollToProducts();
-          });
-        });
-
+      pagination.querySelector('[data-page-nav="next"]')?.addEventListener('click', () => {
+        if (hasMore) {
+          applyFilters(currentPage + 1, 'next');
+          smoothScrollToProducts();
+        }
+      });
+      pagination.querySelector('[data-page-nav="prev"]')?.addEventListener('click', () => {
+        // Note: True 'prev' with startAfter is complex. This is a simplified "go back to page 1"
+        // For a real app, you'd need to manage cursors for both directions.
+        window.location.reload(); // Simple way to go back
       });
     }
   }
@@ -594,53 +729,57 @@ function initProductsPage() {
   }
 
   // تحسين الاستجابة للـ input (debounce بسيط)
-  let searchTimer = null;
+  let debounceTimer = null;
+  function debouncedApplyFilters() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      productsCache = {}; // Invalidate cache on filter change
+      lastVisibleDoc = null;
+      applyFilters(1);
+      smoothScrollToProducts();
+      focusTarget?.focus?.({ preventScroll: true });
+    }, 300);
+  }
 
   filterButtons.forEach((button) => {
     button.addEventListener("click", () => {
       currentCategory = button.dataset.category;
-      currentPage = 1;
       filterButtons.forEach((item) =>
         item.classList.toggle("active", item === button),
       );
-      applyFilters();
-      smoothScrollToProducts();
-      // دعم لوحة المفاتيح: نقل focus بدون تعطيل المستخدم
-      focusTarget?.focus?.({ preventScroll: true });
+      debouncedApplyFilters();
     });
   });
 
   searchInput?.addEventListener("input", () => {
-    if (searchTimer) clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => {
-      currentPage = 1;
-      applyFilters();
-      smoothScrollToProducts();
-      focusTarget?.focus?.({ preventScroll: true });
-    }, 220);
+    debouncedApplyFilters();
   });
 
   sortSelect?.addEventListener("change", () => {
-    currentPage = 1;
-    applyFilters();
-    smoothScrollToProducts();
-    focusTarget?.focus?.({ preventScroll: true });
+    debouncedApplyFilters();
   });
 
-  applyFilters();
+  // Initial load
+  applyFilters(1);
 }
-
 
 async function initProductDetail() {
   const productId = new URLSearchParams(window.location.search).get("id");
   const detail = document.getElementById("product-detail");
   if (!detail || !productId) return;
 
-  if (!Array.isArray(products) || products.length === 0) {
-    await syncFirestore().catch((e) => console.warn("[ProductDetail] syncFirestore failed", e));
+  // Try to find in cache first
+  let product = getProductById(productId);
+
+  if (!product) {
+    // If not found, fetch from Firestore
+    const docRef = doc(db, PRODUCTS_COL, productId);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      product = normalizeProduct({ id: docSnap.id, ...docSnap.data() });
+    }
   }
 
-  const product = getProductById(productId);
   if (!product) {
     detail.innerHTML = '<div class="alert alert-danger">المنتج غير موجود</div>';
     return;
@@ -649,11 +788,11 @@ async function initProductDetail() {
   detail.innerHTML = `
     <div class="row g-4">
       <div class="col-lg-6">
-        <img src="${product.images[0]}" alt="${product.name}" class="w-100 mb-3" id="mainImage">
+        <img src="${product.images[0]}" alt="${product.name}" class="w-100 mb-3" id="mainImage" loading="lazy" decoding="async">
         <div class="d-flex gap-2">
           ${product.images
             .map(
-              (image) => `<img src="${image}" alt="${product.name}" class="thumb-image" onclick="changeMainImage('${image}')" style="width: 90px; height: 70px; object-fit: cover; cursor: pointer;">`,
+              (image) => `<img src="${image}" alt="${product.name}" class="thumb-image" onclick="changeMainImage('${image}')" style="width: 90px; height: 70px; object-fit: cover; cursor: pointer;" loading="lazy" decoding="async">`,
             )
             .join("")}
         </div>
@@ -678,6 +817,54 @@ async function initProductDetail() {
 function changeMainImage(src) {
   const el = document.getElementById("mainImage");
   if (el) el.src = src;
+}
+
+async function initReviewsPage() {
+  const container = document.getElementById("reviews-grid");
+  if (!container) return;
+
+  try {
+    const reviews = await loadApprovedReviews();
+
+    if (!reviews.length) {
+      container.innerHTML =
+        '<div class="col-12 text-center py-5"><p class="text-muted">لا توجد آراء معتمدة حالياً.</p></div>';
+      return;
+    }
+
+    container.innerHTML = reviews
+      .map((review, index) => {
+        const productLabel = review.productName
+          ? `عن المنتج: ${review.productName}`
+          : "عن المنتج";
+        const orderLabel = review.orderRef
+          ? `مرجع الطلب: ${review.orderRef}`
+          : "";
+        const dateLabel = review.createdAt
+          ? `تاريخ التقييم: ${new Date(review.createdAt).toLocaleDateString(
+              "ar-EG",
+            )}`
+          : "";
+
+        return `
+            <div class="col-lg-4" data-aos="fade-up" ${index === 1 ? 'data-aos-delay="100"' : index === 2 ? 'data-aos-delay="200"' : ""}>
+              <div class="review-card p-4">
+                <div class="text-warning mb-3">★★★★★</div>
+                <p>“${(review.text || "").replaceAll('"', '"')}”</p>
+                <strong>— ${(review.name || "").replaceAll('"', '"')}</strong>
+                <div class="mt-2 small text-muted">${productLabel}</div>
+                ${orderLabel ? `<div class="small text-muted">${orderLabel}</div>` : ""}
+                ${dateLabel ? `<div class="small text-muted">${dateLabel}</div>` : ""}
+              </div>
+            </div>
+          `;
+      })
+      .join("");
+  } catch (e) {
+    console.warn("Unable to render reviews", e);
+    container.innerHTML =
+      '<div class="col-12 text-center py-5"><p class="text-muted">تعذر تحميل الآراء.</p></div>';
+  }
 }
 
 function initCartPage() {
@@ -720,9 +907,9 @@ function initCartPage() {
       }
 
       return `
-      <div class="cart-item mb-3 p-3">
+      <div class="cart-item mb-3 p-3" data-id="${item.id}">
         <div class="row align-items-center">
-          <div class="col-md-3"><img src="${item.images[0]}" alt="${item.name}"></div>
+          <div class="col-md-3"><img src="${item.images[0]}" alt="${item.name}" loading="lazy" decoding="async"></div>
           <div class="col-md-5">
             <h6 class="fw-bold">${item.name}</h6>
             <p class="small text-muted mb-0">${item.description}</p>
@@ -746,7 +933,7 @@ function initCartPage() {
 
   const subtotal = items.reduce(
     (sum, entry) => sum + (entry.type === "offer" ? 0 : entry.item.price * entry.qty),
-    0,
+    0
   );
 
   let discount = 0;
@@ -762,7 +949,7 @@ function initCartPage() {
     const p = entry.item;
     const perUnitDiscount = Math.max(
       0,
-      Number(p.oldPrice || p.price) - Number(p.price || 0),
+      Number(p.oldPrice || p.price) - Number(p.price || 0)
     );
     return sum + perUnitDiscount * entry.qty;
   }, 0);
@@ -827,6 +1014,7 @@ window.addEventListener("admin-data-updated", () => {
   }
 });
 
+
 // bind to window so inline onclick works even if errors before DOMContentLoaded
 window.addToCart = addToCart;
 window.addOfferToCart = addOfferToCart;
@@ -837,15 +1025,15 @@ window.changeMainImage = changeMainImage;
 
 document.addEventListener("DOMContentLoaded", () => {
   createHiddenAdminButton();
+  updateCartBadge(); // Update badge on initial load
 
   syncFirestore()
     .catch((e) => {
       console.warn("Firestore sync failed", e);
     })
     .finally(() => {
-      const heroSwiper = document.querySelector(".mySwiper");
-      if (heroSwiper && typeof Swiper !== "undefined") {
-        new Swiper(".mySwiper", {
+      if (document.querySelector(".heroSwiper") && typeof Swiper !== "undefined") {
+        new Swiper(".heroSwiper", {
           loop: true,
           autoplay: { delay: 3000 },
           pagination: { el: ".swiper-pagination", clickable: true },
@@ -868,4 +1056,3 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
 });
-

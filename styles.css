@@ -41,6 +41,15 @@ section { padding: 90px 0; }
 }
 .navbar-nav .nav-link { color: var(--text); font-weight: 600; margin: 0 6px; }
 .navbar-nav .nav-link:hover { color: var(--green-dark); }
+.nav-item .cart-link {
+  position: relative;
+  display: inline-block;
+}
+.cart-badge {
+  position: absolute; top: -5px; right: -10px; background: var(--gold); color: var(--white);
+  border-radius: 50%; width: 20px; height: 20px; font-size: 12px;
+  display: flex; align-items: center; justify-content: center; font-weight: bold;
+}
 
 .hero {
   min-height: 100vh;
@@ -77,18 +86,6 @@ section { padding: 90px 0; }
   background: rgba(255,255,255,0.7);
 }
 
-.btn-outline-custom {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-  border: 2px solid var(--green-dark);
-  color: var(--green-dark);
-  border-radius: 999px;
-  padding: 12px 26px;
-  font-weight: 700;
-  background: rgba(255,255,255,0.7);
-}
 .btn-primary-custom:hover { transform: translateY(-3px); box-shadow: 0 14px 30px rgba(111,143,98,0.18); color: var(--white); }
 
 /* توحيد محاذاة الزرين في هيرو الصفحة */
@@ -104,6 +101,22 @@ section { padding: 90px 0; }
 .product-card, .offer-card, .review-card, .gallery-card, .faq-card, .contact-card, .cart-item, .admin-card {
   border-radius: 24px; overflow: hidden; border: 1px solid rgba(167,199,150,0.28); box-shadow: var(--shadow); background: rgba(255,255,255,0.88);
 }
+.skeleton-card .product-card {
+  background: #fff;
+}
+.skeleton {
+  background-color: #e0e0e0;
+  border-radius: 4px;
+  animation: pulse 1.5s infinite ease-in-out;
+}
+.skeleton-img { height: 220px; border-radius: 24px 24px 0 0; }
+.skeleton-text { height: 1em; margin-bottom: .5rem; }
+@keyframes pulse {
+  0% { background-color: #e0e0e0; }
+  50% { background-color: #f0f0f0; }
+  100% { background-color: #e0e0e0; }
+}
+
 .product-card:hover, .offer-card:hover, .review-card:hover, .gallery-card:hover { transform: translateY(-6px); transition: .3s ease; }
 .product-card img { height: 220px; object-fit: cover; }
 .badge-gold { background: var(--gold); color: var(--white); }
@@ -136,6 +149,13 @@ section { padding: 90px 0; }
 
 .footer-dev { margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(216, 230, 207, 0.18); text-align: center; }
 .footer-dev .dev-name { display: inline-block; background: rgba(212,175,55,0.15); border: 1px solid rgba(212,175,55,0.35); color: #ffe8a6; padding: 8px 18px; border-radius: 999px; font-weight: 800; letter-spacing: 0.2px; box-shadow: 0 10px 25px rgba(0,0,0,0.12); }
+.footer-dev .dev-name a {
+  color: inherit;
+  text-decoration: none;
+  transition: transform 0.2s ease;
+  display: inline-block;
+}
+.footer-dev .dev-name a:hover { transform: scale(1.2); }
 
 
 .table td, .table th { vertical-align: middle; }
