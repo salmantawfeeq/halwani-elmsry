@@ -239,6 +239,12 @@ async function addProduct(event) {
   event.preventDefault();
   const form = event.target;
 
+  const submitButton = form.querySelector('button[type="submit"]');
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.textContent = 'جاري المعالجة...';
+  }
+
   const category = form.elements.category.value.trim();
   const name = form.elements.name.value.trim();
 
@@ -270,6 +276,11 @@ async function addProduct(event) {
 
   form.reset();
   showToast('تمت إضافة المنتج');
+
+  if (submitButton) {
+    submitButton.disabled = false;
+    submitButton.textContent = 'إضافة منتج';
+  }
 }
 
 function editProduct(id) {
@@ -299,6 +310,12 @@ async function updateProduct(event) {
   event.preventDefault();
   const form = event.target;
   const id = form.dataset.editId;
+
+  const submitButton = form.querySelector('button[type="submit"]');
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.textContent = 'جاري التحديث...';
+  }
 
   if (!id) return;
 
@@ -333,6 +350,11 @@ async function updateProduct(event) {
   form.reset();
   delete form.dataset.editId;
   showToast('تم تحديث المنتج');
+
+  if (submitButton) {
+    submitButton.disabled = false;
+    submitButton.textContent = 'تحديث المنتج';
+  }
 }
 
 async function deleteProduct(id) {
@@ -377,6 +399,12 @@ function editOffer(id) {
 async function addOffer(event) {
   event.preventDefault();
   const form = event.target;
+  const submitButton = form.querySelector('button[type="submit"]');
+
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.textContent = 'جاري المعالجة...';
+  }
 
   const images = await readImageFiles(form.elements.offerImageFiles?.files);
 
@@ -409,8 +437,10 @@ async function addOffer(event) {
 
   form.reset();
   delete form.dataset.editId;
-  const btn = form.querySelector('button');
-  if (btn) btn.textContent = 'إضافة عرض';
+  if (submitButton) {
+    submitButton.disabled = false;
+    submitButton.textContent = 'إضافة عرض';
+  }
 }
 
 async function deleteOffer(id) {
@@ -620,20 +650,52 @@ async function submitPendingReview() {
 // =========================
 // File inputs
 // =========================
+function resizeImage(file, maxWidth = 1280, maxHeight = 1280, quality = 0.85) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let { width, height } = img;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = reject;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 function readImageFiles(filesList) {
   const files = Array.from(filesList || []);
   if (!files.length) return Promise.resolve([]);
 
   return Promise.all(
-    files.map(
-      (file) =>
-        new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        })
-    )
+    // Resize each image
+    files.map((file) => resizeImage(file).catch(e => {
+      console.error("Error resizing image:", file.name, e);
+      return null; // Return null if resizing fails for a specific image
+    }))
   );
 }
 
@@ -669,7 +731,7 @@ document.addEventListener('DOMContentLoaded', () => {
     e.preventDefault();
     const input = document.getElementById('category-name');
     const category = input?.value?.trim();
-    if (!category) return;
+    if (!category || categories.includes(category)) return;
     if (!categories.includes(category)) categories.push(category);
     renderCategories();
     input.value = '';
@@ -685,4 +747,3 @@ document.addEventListener('DOMContentLoaded', () => {
     AOS.init({ duration: 800, once: true });
   }
 });
-
