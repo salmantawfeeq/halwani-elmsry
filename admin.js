@@ -1,11 +1,6 @@
 // ADMIN PANEL - Firebase Auth + Firestore CRUD
 
 import { auth, db } from './firebase-init.js';
-import {
-  signInWithEmailAndPassword,
-  onAuthStateChanged,
-  signOut
-} from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 
 import {
   collection,
@@ -62,6 +57,7 @@ let products = [];
 let offers = [];
 let reviews = [];
 
+// سيتم استبدال هذا لاحقًا بنظام صلاحيات من الباك إند
 let currentUser = null;
 
 // =========================
@@ -497,40 +493,71 @@ function initAdminLogin() {
   loginForm.addEventListener('submit', async (event) => {
     event.preventDefault();
 
+    const submitButton = loginForm.querySelector('button');
+    submitButton.disabled = true;
+    submitButton.textContent = 'جارٍ التحقق...';
+
     const email = document.getElementById('admin-email').value.trim();
     const password = document.getElementById('admin-password').value.trim();
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      showToast('تم تسجيل الدخول');
+      // استبدل هذا الرابط برابط الـ API الفعلي الخاص بك
+      const response = await fetch('https://your-api-url.com/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'فشل تسجيل الدخول' }));
+        throw new Error(errorData.message || 'تحقق من البريد/كلمة المرور');
+      }
+
+      const result = await response.json();
+
+      // تخزين التوكن (Token) لاستخدامه في الطلبات القادمة
+      localStorage.setItem('authToken', result.token);
+
+      // محاكاة جلسة المستخدم
+      currentUser = { email: result.email };
+      setPanelVisible(true);
+      await fetchAll(); // تحميل البيانات بعد تسجيل الدخول
+
+      showToast('تم تسجيل الدخول بنجاح');
+
     } catch (e) {
       console.warn(e);
-      Swal.fire({ icon: 'error', title: 'فشل تسجيل الدخول', text: e?.message || 'تحقق من البريد/كلمة المرور' });
+      Swal.fire({ icon: 'error', title: 'فشل تسجيل الدخول', text: e.message });
+    } finally {
+      submitButton.disabled = false;
+      submitButton.textContent = 'دخول';
     }
   });
 }
 
 function initLogout() {
   const logoutBtn = document.getElementById('logout-btn');
-  if (!logoutBtn) return;
-  logoutBtn.addEventListener('click', async () => {
-    await signOut(auth);
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', () => {
+    localStorage.removeItem('authToken');
+    currentUser = null;
     window.location.reload();
   });
+  }
 }
 
 function initAuthGate() {
-  onAuthStateChanged(auth, async (user) => {
-    currentUser = user;
-    if (!user) {
-      setPanelVisible(false);
-      return;
-    }
+  // عند تحميل الصفحة، تحقق من وجود التوكن
+  const token = localStorage.getItem('authToken');
+  if (token) {
+    // يمكنك هنا إضافة طلب للتحقق من صلاحية التوكن من الباك إند
+    // للتبسيط، سنفترض أن التوكن صالح
+    currentUser = { token }; // قيمة وهمية للمستخدم
     setPanelVisible(true);
-
-    // Verify admin claim is handled by rules; if user isn't admin, writes will fail.
-    await fetchAll();
-  });
+    fetchAll();
+  } else {
+    setPanelVisible(false);
+  }
 }
 
 // =========================

@@ -168,25 +168,66 @@ async function syncFirestore() {
     document.getElementById("cart-items") &&
     document.getElementById("cart-summary")
   ) {
-    initCartPage();
+    // Rendering cart لا يجب أن يتوقف بسبب أي خطأ لاحق في sync.
+    try {
+      initCartPage();
+    } catch (e) {
+      console.warn("initCartPage failed after syncFirestore", e);
+    }
   }
 
   if (document.getElementById("product-detail")) initProductDetail();
+
+}
+
+function getCartCount() {
+  return cart.reduce((sum, item) => sum + item.qty, 0);
 }
 
 function updateCartBadge() {
   const cartLink = document.querySelector('.cart-link');
-  if (!cartLink) return;
-  const count = cart.reduce((sum, item) => sum + item.qty, 0);
-  let badge = cartLink.querySelector('.cart-badge');
-  if (!badge) {
-    badge = document.createElement('span');
-    badge.className = 'cart-badge';
-    cartLink.appendChild(badge);
+  const count = getCartCount();
+
+  // Desktop/desktop nav badge
+  if (cartLink) {
+    let badge = cartLink.querySelector('.cart-badge');
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.className = 'cart-badge';
+      cartLink.appendChild(badge);
+    }
+    badge.textContent = count;
+    badge.style.display = count > 0 ? 'flex' : 'none';
   }
-  badge.textContent = count;
-  badge.style.display = count > 0 ? 'flex' : 'none';
+
+  // Mobile floating button badge
+  const floating = document.querySelector('.floating-cart');
+  if (!floating) return;
+
+  let floatBadge = floating.querySelector('.floating-cart-badge');
+  if (!floatBadge) {
+    floatBadge = document.createElement('span');
+    floatBadge.className = 'floating-cart-badge';
+    floating.appendChild(floatBadge);
+  }
+  floatBadge.textContent = count;
+  floatBadge.style.display = count > 0 ? 'flex' : 'none';
 }
+
+function initFloatingCartButton() {
+  if (document.querySelector('.floating-cart')) return;
+
+  const btn = document.createElement('a');
+  btn.href = 'cart.html';
+  btn.className = 'floating-cart';
+  btn.setAttribute('aria-label', 'السلة');
+
+  btn.innerHTML = '<i class="fa-solid fa-cart-shopping"></i>';
+
+  // badge will be created/updated by updateCartBadge()
+  document.body.appendChild(btn);
+}
+
 
 // =========================
 // Cart actions
@@ -872,12 +913,21 @@ function initCartPage() {
   const cartSummary = document.getElementById("cart-summary");
   if (!cartItemsContainer || !cartSummary) return;
 
+  // إعادة قراءة السلة لحظة التنفيذ (عشان أي اختلاف بين حالة الصفحة الحالية/localStorage).
+  try {
+    cart = JSON.parse(localStorage.getItem(cartKey) || "[]");
+  } catch (e) {
+    console.warn("Failed to parse cart from localStorage", e);
+    cart = [];
+  }
+
   const items = getCartItems();
   if (!items.length) {
     cartItemsContainer.innerHTML = '<div class="col-12"><div class="alert alert-info">السلة فارغة حالياً</div></div>';
     cartSummary.innerHTML = '<div class="summary-box"><h5>الإجمالي</h5><p class="mb-0">0 ج.م</p></div>';
     return;
   }
+
 
   cartItemsContainer.innerHTML = items
     .map(({ type, item, qty }) => {
@@ -886,10 +936,11 @@ function initCartPage() {
         <div class="cart-item mb-3 p-3">
           <div class="row align-items-center">
             <div class="col-md-7">
-              <h6 class="fw-bold">العرض: ${item.title}</h6>
-              <p class="small text-muted mb-0">${item.description}</p>
-              <span class="badge badge-gold mt-2">خصم ${item.discount}%</span>
+              <h6 class="fw-bold">العرض: ${item.title ?? "عرض"}</h6>
+              <p class="small text-muted mb-0">${item.description ?? ""}</p>
+              <span class="badge badge-gold mt-2">خصم ${item.discount ?? 0}%</span>
             </div>
+
             <div class="col-md-2">
               <div class="quantity-control">
                 <button onclick="changeQty('${item.id}', -1)">−</button>
@@ -909,11 +960,12 @@ function initCartPage() {
       return `
       <div class="cart-item mb-3 p-3" data-id="${item.id}">
         <div class="row align-items-center">
-          <div class="col-md-3"><img src="${item.images[0]}" alt="${item.name}" loading="lazy" decoding="async"></div>
+          <div class="col-md-3"><img src="${item.images?.[0] ?? "https://images.unsplash.com/photo-1551024601-bec78aea704b?auto=format&fit=crop&w=900&q=80"}" alt="${item.name ?? "منتج"}" loading="lazy" decoding="async"></div>
           <div class="col-md-5">
-            <h6 class="fw-bold">${item.name}</h6>
-            <p class="small text-muted mb-0">${item.description}</p>
+            <h6 class="fw-bold">${item.name ?? "منتج"}</h6>
+            <p class="small text-muted mb-0">${item.description ?? ""}</p>
           </div>
+
           <div class="col-md-2">
             <div class="quantity-control">
               <button onclick="changeQty('${item.id}', -1)">−</button>
@@ -1025,7 +1077,24 @@ window.changeMainImage = changeMainImage;
 
 document.addEventListener("DOMContentLoaded", () => {
   createHiddenAdminButton();
+  initFloatingCartButton();
   updateCartBadge(); // Update badge on initial load
+
+  // Always render cart ASAP from localStorage so UI doesn't depend on Firestore.
+
+  if (
+    document.getElementById("cart-items") &&
+    document.getElementById("cart-summary")
+  ) {
+    try {
+      // تحديث مرجع cart من localStorage (مهم لو كان cart اتعَدل في تبويب/مسار مختلف)
+      cart = JSON.parse(localStorage.getItem(cartKey) || "[]");
+      initCartPage();
+    } catch (e) {
+      console.warn("initCartPage failed", e);
+    }
+  }
+
 
   syncFirestore()
     .catch((e) => {
@@ -1054,5 +1123,8 @@ document.addEventListener("DOMContentLoaded", () => {
           stagger: 0.2,
         });
       }
+
+      // If Firestore succeeded, it will have already called initCartPage() in syncFirestore.
     });
 });
+
