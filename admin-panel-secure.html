@@ -42,7 +42,7 @@
           <div class="row g-4 mt-2">
             <div class="col-lg-6">
               <div class="admin-card">
-                <h4>إدارة المنتجات</h4>
+                <h4>إضافة منتج جديد</h4>
                 <form id="product-form">
                   <div class="mb-3"><input class="form-control" name="name" placeholder="اسم المنتج" required /></div>
                   <div class="mb-3"><select class="form-select" id="product-category-select" name="category" required></select></div>
@@ -58,8 +58,11 @@
                   <div class="form-check mb-3"><input class="form-check-input" type="checkbox" name="bestSeller" /> <label class="form-check-label">الأكثر مبيعًا</label></div>
                   <button class="btn btn-primary-custom">إضافة منتج</button>
                 </form>
-                <hr />
-                <form id="product-edit-form">
+              </div>
+
+              <div class="admin-card mt-4">
+                <h4 class="mb-4">تعديل المنتجات والقائمة</h4>
+                <form id="product-edit-form" class="mb-4">
                   <div class="mb-3"><input id="product-name" class="form-control" name="name" placeholder="اسم المنتج" required /></div>
                   <div class="mb-3"><select id="product-edit-category-select" class="form-select" name="category" required></select></div>
                   <div class="mb-3"><input id="product-price" type="number" class="form-control" name="price" placeholder="السعر" required /></div>
@@ -72,7 +75,7 @@
                   <div class="mb-3"><input type="file" class="form-control" name="imageFiles" accept="image/*" multiple /></div>
                   <div class="form-check mb-3"><input id="product-featured" class="form-check-input" type="checkbox" name="featured" /> <label class="form-check-label">مميز</label></div>
                   <div class="form-check mb-3"><input id="product-best-seller" class="form-check-input" type="checkbox" name="bestSeller" /> <label class="form-check-label">الأكثر مبيعًا</label></div>
-                  <button class="btn btn-outline-secondary">تحديث المنتج</button>
+                  <button type="submit" class="btn btn-outline-secondary">تحديث المنتج</button>
                 </form>
                 <table class="table mt-4">
                   <thead><tr><th>#</th><th>الاسم</th><th>التصنيف</th><th>السعر</th><th>الشارة</th><th>الإجراء</th></tr></thead>
@@ -144,22 +147,45 @@
             <div class="col-lg-6">
               <div class="admin-card">
                 <h4>الإعدادات</h4>
-                <form id="settings-form">
-                  <div class="mb-3"><input id="whatsapp-number" class="form-control" placeholder="رقم واتساب" /></div>
-                  <div class="mb-3"><input id="site-logo" class="form-control" placeholder="الشعار" /></div>
-                  <div class="mb-3"><input id="banner-text" class="form-control" placeholder="نص البانر" /></div>
-                  <button class="btn btn-primary-custom">حفظ</button>
+                <p class="text-muted">تحكم في الإعدادات الأساسية التي تظهر للزوار في الموقع.</p>
+
+                <form id="whatsapp-settings-form">
+                  <div class="mb-3">
+                    <label class="form-label">رقم واتساب لاستقبال الطلبات</label>
+                    <input id="whatsapp-number" class="form-control" placeholder="مثال: 201011001128">
+                    <div class="form-text">هذا الرقم ستصل إليه رسائل الطلبات من العملاء.</div>
+                  </div>
+                  <div class="mb-3">
+                    <label class="form-label">شعار الموقع</label>
+                    <div class="mb-2">
+                      <img id="logo-preview" src="" alt="معاينة الشعار" style="max-height: 50px; display: none; border: 1px solid #ddd; padding: 5px; border-radius: 4px;">
+                    </div>
+                    <input id="site-logo-file" type="file" class="form-control" accept="image/*">
+                    <div class="form-text">اترك الحقل فارغاً لعدم تغيير الشعار الحالي.</div>
+                    <input id="site-logo" type="hidden">
+                  </div>
+                  <div class="mb-3">
+                    <label class="form-label">نص الشريط العلوي (Banner)</label>
+                    <input id="banner-text" class="form-control" placeholder="مثال: شحن مجاني للطلبات فوق 500 جنيه">
+                  </div>
+                  <button class="btn btn-primary-custom" type="submit">حفظ الإعدادات</button>
                 </form>
               </div>
             </div>
           </div>
 
+
         </div>
       </div>
     </div>
 
-    <div class="footer-dev">
-      <span class="dev-name">تم التطوير بواسطة SALMAN TAWFIQ</span>
+      <div class="footer-dev">
+      <span class="dev-name">تم التطوير بواسطة
+        <a href="https://wa.me/201026662599" target="_blank" rel="noopener" aria-label="WhatsApp" class="mx-2">
+          <i class="fa-brands fa-whatsapp"></i>
+        </a>
+        <span class="dev-name-text">SALMAN TAWFIQ</span>
+      </span>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>

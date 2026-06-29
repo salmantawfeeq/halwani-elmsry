@@ -3,11 +3,27 @@
 import { auth, db } from './firebase-init.js';
 
 import {
+  signInWithEmailAndPassword,
+  onAuthStateChanged,
+  signOut,
+  
+} from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+
+// NOTE: صلاحيات القراءة/الكتابة لازم تتظبط في Firebase Security Rules
+
+
+import {
   collection,
-  getDocs,
-  query,
-  where
+  getDocs
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+
+import {
+  getStorage,
+  ref,
+  uploadBytes,
+  getDownloadURL
+} from "https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js";
+
 
 import {
   adminListProducts,
@@ -23,8 +39,6 @@ import {
   adminDeleteReview,
   adminUpsertSettings
 } from './admin-firestore-client.js';
-
-const DEFAULT_CATEGORIES = ['شرقية', 'غربية', 'تورتات', 'جاتوه', 'كيك', 'هدايا', 'عروض'];
 
 const PRODUCTS_COL = 'products';
 const OFFERS_COL = 'offers';
@@ -52,7 +66,7 @@ function setPanelVisible(visible) {
 // =========================
 // State
 // =========================
-let categories = [...DEFAULT_CATEGORIES];
+let categories = [];
 let products = [];
 let offers = [];
 let reviews = [];
@@ -65,19 +79,21 @@ let currentUser = null;
 // =========================
 async function fetchAll() {
   // Products/Offers/Reviews are full lists; we filter in render.
-  products = await adminListProducts().catch(() => []);
-  offers = await adminListOffers().catch(() => []);
-  reviews = await adminListReviews().catch(() => []);
-
-  const catsFromProducts = Array.from(new Set(products.map((p) => p.category).filter(Boolean)));
-  categories = Array.from(new Set([...DEFAULT_CATEGORIES, ...catsFromProducts]));
+  const [p, o, r, s] = await Promise.all([
+    adminListProducts().catch(() => []),
+    adminListOffers().catch(() => []),
+    adminListReviews().catch(() => []),
+    renderSettings() // This now returns the settings object
+  ]);
+  products = p;
+  offers = o;
+  reviews = r;
 
   renderDashboard();
   renderProducts();
   renderCategories();
   renderOffers();
   renderReviews();
-  await renderSettings();
 }
 
 async function renderSettings() {
@@ -86,14 +102,24 @@ async function renderSettings() {
     const snap = await getDocs(collection(db, SETTINGS_COL));
     if (!snap.empty) {
       const first = snap.docs[0];
-      const s = first.data() || {};
+      const settingsData = first.data() || {};
       const whatsapp = document.getElementById('whatsapp-number');
-      const logo = document.getElementById('site-logo');
+      const logoUrlInput = document.getElementById('site-logo');
+      const logoPreview = document.getElementById('logo-preview');
       const banner = document.getElementById('banner-text');
-      if (whatsapp) whatsapp.value = s.whatsapp || '';
-      if (logo) logo.value = s.logo || '';
-      if (banner) banner.value = s.banner || '';
+      if (whatsapp) whatsapp.value = settingsData.whatsapp || '';
+      if (logoUrlInput) logoUrlInput.value = settingsData.logo || '';
+      if (logoPreview && settingsData.logo) {
+        logoPreview.src = settingsData.logo;
+        logoPreview.style.display = 'block';
+      }
+      if (banner) banner.value = settingsData.banner || '';
+
+      // Load categories from settings
+      categories = Array.isArray(settingsData.categories) && settingsData.categories.length > 0 ? settingsData.categories : ['عام'];
+      return settingsData;
     }
+    return null;
   } catch (e) {
     console.warn('Unable to render settings', e);
   }
@@ -265,17 +291,30 @@ async function addProduct(event) {
     images: images.length ? images : ['https://images.unsplash.com/photo-1551024601-bec78aea704b?auto=format&fit=crop&w=900&q=80']
   };
 
-  await adminCreateProduct(payload);
+  try {
+    const newProductId = await adminCreateProduct(payload);
 
-  if (!categories.includes(category)) categories.push(category);
-  await fetchAll();
+    // --- IMPROVEMENT: Update local state instead of full refetch ---
+    products.push({ ...payload, id: newProductId });
+    if (!categories.includes(category)) {
+      categories.push(category);
+      await adminUpsertSettings({ categories }); // Persist new category
+      renderCategories();
+    }
+    populateCategorySelects(); // Make sure new category is in selects
+    renderProducts();
+    renderDashboard();
 
-  form.reset();
-  showToast('تمت إضافة المنتج');
-
-  if (submitButton) {
-    submitButton.disabled = false;
-    submitButton.textContent = 'إضافة منتج';
+    form.reset();
+    showToast('تمت إضافة المنتج');
+  } catch (error) {
+    console.error("Failed to add product:", error);
+    showToast('فشل إضافة المنتج', 'error');
+  } finally {
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = 'إضافة منتج';
+    }
   }
 }
 
@@ -338,34 +377,63 @@ async function updateProduct(event) {
     images: images.length ? images : (products.find((p) => p.id === id)?.images || [])
   };
 
-  await adminUpdateProduct(id, payload);
+  try {
+    await adminUpdateProduct(id, payload);
 
-  if (!categories.includes(category)) categories.push(category);
-  await fetchAll();
-
-  form.reset();
-  delete form.dataset.editId;
-  showToast('تم تحديث المنتج');
-
-  if (submitButton) {
-    submitButton.disabled = false;
-    submitButton.textContent = 'تحديث المنتج';
+    // --- IMPROVEMENT: Update local state instead of full refetch ---
+    const productIndex = products.findIndex(p => p.id === id);
+    if (productIndex > -1) {
+      products[productIndex] = { ...products[productIndex], ...payload, id };
+    }
+    if (!categories.includes(category)) {
+      categories.push(category);
+      await adminUpsertSettings({ categories }); // Persist new category
+      renderCategories();
+      populateCategorySelects(); // Make sure new category is in selects
+    }
+    renderProducts();
+    renderDashboard();
+    form.reset();
+    delete form.dataset.editId;
+    showToast('تم تحديث المنتج');
+  } catch (error) {
+    console.error("Failed to update product:", error);
+    showToast('فشل تحديث المنتج', 'error');
+  } finally {
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = 'تحديث المنتج';
+    }
   }
 }
 
 async function deleteProduct(id) {
-  await adminDeleteProduct(id);
-  await fetchAll();
-  showToast('تم حذف المنتج');
+  try {
+    await adminDeleteProduct(id);
+    products = products.filter(p => String(p.id) !== String(id));
+    renderProducts();
+    renderDashboard(); // Update stats
+    showToast('تم حذف المنتج');
+  } catch (error) {
+    console.error("Failed to delete product:", error);
+    showToast('فشل حذف المنتج', 'error');
+  }
 }
 
 // =========================
 // CRUD - Categories (UI only)
 // =========================
-function deleteCategory(name) {
+async function deleteCategory(name) {
   categories = categories.filter((c) => c !== name);
-  renderCategories();
-  showToast('تم حذف التصنيف من القائمة', 'warning');
+  try {
+    await adminUpsertSettings({ categories }); // Persist the change
+    renderCategories();
+    showToast('تم حذف التصنيف');
+  } catch (error) {
+    console.error("Failed to delete category:", error);
+    showToast('فشل حذف التصنيف', 'error');
+    await fetchAll(); // Re-fetch to restore the category list
+  }
 }
 
 // =========================
@@ -421,49 +489,89 @@ async function addOffer(event) {
     images: images.length ? images : (prev?.images || [])
   };
 
-  if (isEdit) {
-    await adminUpdateOffer(editId, payload);
-    showToast('تم تحديث العرض');
-  } else {
-    await adminCreateOffer(payload);
-    showToast('تمت إضافة العرض');
-  }
+  try {
+    if (isEdit) {
+      await adminUpdateOffer(editId, payload);
+      showToast('تم تحديث العرض');
+    } else {
+      await adminCreateOffer(payload);
+      showToast('تمت إضافة العرض');
+    }
 
-  await fetchAll();
-
-  form.reset();
-  delete form.dataset.editId;
-  if (submitButton) {
-    submitButton.disabled = false;
-    submitButton.textContent = 'إضافة عرض';
+    // --- IMPROVEMENT: Update local state instead of full refetch ---
+    if (isEdit) {
+      const offerIndex = offers.findIndex(o => o.id === editId);
+      if (offerIndex > -1) offers[offerIndex] = { ...payload, id: editId };
+    } else {
+      // We don't get the new ID back, so a refetch is simpler here for now.
+      await fetchAll();
+      return; // fetchAll already handles UI updates
+    }
+    renderOffers();
+    form.reset();
+    delete form.dataset.editId;
+  } catch (error) {
+    console.error("Failed to save offer:", error);
+    showToast('فشل حفظ العرض', 'error');
+  } finally {
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = 'إضافة عرض';
+    }
   }
 }
 
 async function deleteOffer(id) {
-  await adminDeleteOffer(id);
-  await fetchAll();
-  showToast('تم حذف العرض');
+  try {
+    await adminDeleteOffer(id);
+    offers = offers.filter(o => String(o.id) !== String(id));
+    renderOffers();
+    showToast('تم حذف العرض');
+  } catch (error) {
+    console.error("Failed to delete offer:", error);
+    showToast('فشل حذف العرض', 'error');
+  }
 }
 
 // =========================
 // Reviews approved workflow
 // =========================
 async function approveReview(id) {
-  await adminUpdateReview(id, { approved: true });
-  await fetchAll();
-  showToast('تم قبول التقييم');
+  try {
+    await adminUpdateReview(id, { approved: true });
+    const review = reviews.find(r => r.id === id);
+    if (review) review.approved = true;
+    renderReviews();
+    showToast('تم قبول التقييم');
+  } catch (error) {
+    console.error("Failed to approve review:", error);
+    showToast('فشل قبول التقييم', 'error');
+  }
 }
 
 async function rejectReview(id) {
-  await adminUpdateReview(id, { approved: false });
-  await fetchAll();
-  showToast('تم رفض التقييم');
+  try {
+    await adminUpdateReview(id, { approved: false });
+    const review = reviews.find(r => r.id === id);
+    if (review) review.approved = false;
+    renderReviews();
+    showToast('تم رفض التقييم');
+  } catch (error) {
+    console.error("Failed to reject review:", error);
+    showToast('فشل رفض التقييم', 'error');
+  }
 }
 
 async function deleteReview(id) {
-  await adminDeleteReview(id);
-  await fetchAll();
-  showToast('تم حذف التقييم');
+  try {
+    await adminDeleteReview(id);
+    reviews = reviews.filter(r => String(r.id) !== String(id));
+    renderReviews();
+    showToast('تم حذف التقييم');
+  } catch (error) {
+    console.error("Failed to delete review:", error);
+    showToast('فشل حذف التقييم', 'error');
+  }
 }
 
 // =========================
@@ -471,17 +579,52 @@ async function deleteReview(id) {
 // =========================
 async function saveSettings(event) {
   event.preventDefault();
+  const form = event.target;
+  const submitButton = form.querySelector('button[type="submit"]');
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.textContent = 'جاري الحفظ...';
+  }
+  
+  try {
+    let logoUrl = document.getElementById('site-logo').value;
+    const logoFile = document.getElementById('site-logo-file')?.files[0];
 
-  const payload = {
-    whatsapp: document.getElementById('whatsapp-number').value,
-    logo: document.getElementById('site-logo').value,
-    banner: document.getElementById('banner-text').value
-  };
+    if (logoFile) {
+      // بدون Firebase Storage: نخزن الشعار كـ DataURL داخل Firestore
+      logoUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(logoFile);
+      });
 
-  await adminUpsertSettings(payload);
-  await fetchAll();
-  showToast('تم حفظ الإعدادات');
+      showToast('تم رفع الشعار بنجاح', 'success');
+    }
+
+    const payload = {
+      whatsapp: document.getElementById('whatsapp-number').value,
+      logo: logoUrl,
+      banner: document.getElementById('banner-text').value
+    };
+
+    await adminUpsertSettings(payload);
+    showToast('تم حفظ الإعدادات بنجاح', 'success');
+  } catch (error) {
+    console.error("Failed to save settings:", error);
+    const msg = error?.message ? String(error.message) : 'خطأ غير معروف';
+    showToast(`فشل حفظ الإعدادات: ${msg}`, 'error');
+  } finally {
+
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = 'حفظ الإعدادات';
+    }
+  }
 }
+
+
+
 
 // =========================
 // Login via Firebase Auth
@@ -501,33 +644,12 @@ function initAdminLogin() {
     const password = document.getElementById('admin-password').value.trim();
 
     try {
-      // استبدل هذا الرابط برابط الـ API الفعلي الخاص بك
-      const response = await fetch('https://your-api-url.com/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'فشل تسجيل الدخول' }));
-        throw new Error(errorData.message || 'تحقق من البريد/كلمة المرور');
-      }
-
-      const result = await response.json();
-
-      // تخزين التوكن (Token) لاستخدامه في الطلبات القادمة
-      localStorage.setItem('authToken', result.token);
-
-      // محاكاة جلسة المستخدم
-      currentUser = { email: result.email };
-      setPanelVisible(true);
-      await fetchAll(); // تحميل البيانات بعد تسجيل الدخول
-
+      await signInWithEmailAndPassword(auth, email, password);
+      // panel/loader سيتم التحكم فيه من initAuthGate عبر onAuthStateChanged
       showToast('تم تسجيل الدخول بنجاح');
-
     } catch (e) {
       console.warn(e);
-      Swal.fire({ icon: 'error', title: 'فشل تسجيل الدخول', text: e.message });
+      Swal.fire({ icon: 'error', title: 'فشل تسجيل الدخول', text: e.message || 'تحقق من البريد/كلمة المرور' });
     } finally {
       submitButton.disabled = false;
       submitButton.textContent = 'دخول';
@@ -537,28 +659,29 @@ function initAdminLogin() {
 
 function initLogout() {
   const logoutBtn = document.getElementById('logout-btn');
-  if (logoutBtn) {
-    logoutBtn.addEventListener('click', () => {
-    localStorage.removeItem('authToken');
-    currentUser = null;
-    window.location.reload();
+  if (!logoutBtn) return;
+
+  logoutBtn.addEventListener('click', async () => {
+    try {
+      await signOut(auth);
+    } finally {
+      currentUser = null;
+      window.location.reload();
+    }
   });
-  }
 }
 
 function initAuthGate() {
-  // عند تحميل الصفحة، تحقق من وجود التوكن
-  const token = localStorage.getItem('authToken');
-  if (token) {
-    // يمكنك هنا إضافة طلب للتحقق من صلاحية التوكن من الباك إند
-    // للتبسيط، سنفترض أن التوكن صالح
-    currentUser = { token }; // قيمة وهمية للمستخدم
-    setPanelVisible(true);
-    fetchAll();
-  } else {
-    setPanelVisible(false);
-  }
+  onAuthStateChanged(auth, async (user) => {
+    currentUser = user ? { email: user.email } : null;
+
+    setPanelVisible(!!user);
+    if (user) {
+      await fetchAll();
+    }
+  });
 }
+
 
 // =========================
 // Pending Orders (still local)
@@ -743,7 +866,10 @@ window.addProduct = addProduct;
 window.updateProduct = updateProduct;
 window.addOffer = addOffer;
 window.saveSettings = saveSettings;
+
 window.submitPendingReview = submitPendingReview;
+
+
 
 // Pending review button handler uses function reference above
 
@@ -759,13 +885,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const input = document.getElementById('category-name');
     const category = input?.value?.trim();
     if (!category || categories.includes(category)) return;
-    if (!categories.includes(category)) categories.push(category);
-    renderCategories();
-    input.value = '';
-    showToast('تمت إضافة التصنيف');
+    categories.push(category);
+    (async () => {
+      try {
+      await adminUpsertSettings({ categories }); // Persist the change
+      renderCategories();
+      input.value = '';
+      showToast('تمت إضافة التصنيف');
+    } catch (error) {
+      showToast('فشل إضافة التصنيف', 'error');
+      await fetchAll(); // Revert UI changes
+    }
+    })();
   });
   document.getElementById('offer-form')?.addEventListener('submit', addOffer);
-  document.getElementById('settings-form')?.addEventListener('submit', saveSettings);
+  document.getElementById('whatsapp-settings-form')?.addEventListener('submit', saveSettings);
+
+
 
   renderPendingOrdersUI();
   document.getElementById('submit-pending-review-btn')?.addEventListener('click', submitPendingReview);

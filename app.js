@@ -109,6 +109,19 @@ async function loadCollectionAsArray(colName) {
   return items;
 }
 
+async function loadJsonData(filePath) {
+  try {
+    const response = await fetch(filePath);
+    if (!response.ok) {
+      throw new Error(`Network response was not ok for ${filePath}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error(`Failed to load ${filePath}:`, error);
+    return Array.isArray(filePath) ? [] : null; // Return empty array for collections, null for single objects
+  }
+}
+
 async function loadSettings() {
   const settingsCol = collection(db, SETTINGS_COL);
   const snap = await getDocs(settingsCol);
@@ -140,17 +153,26 @@ async function loadApprovedReviews() {
   return items;
 }
 
-async function syncFirestore() {
-  // We no longer load all products upfront.
+// syncFirestore was accidentally left unfinished.
+// Keep a stable API: syncFirestore should just run the real sync.
+function syncFirestore() {
+  return syncLocalData();
+}
+
+async function syncLocalData() {
   const [o, s, r] = await Promise.all([
     loadOffers().catch(() => []),
     loadSettings().catch(() => null),
     loadApprovedReviews().catch(() => []),
+    loadJsonData('db/offers.json').then(data => (data || []).map(normalizeOffer)),
+    loadJsonData('db/settings.json'),
+    loadJsonData('db/reviews.json').then(data => (data || []).filter(review => review.approved)),
   ]);
 
   offers = o;
   settings = s;
 
+  applyGlobalSettings(settings);
   // Page-specific initializations
   if (document.getElementById("featured-products")) initHomePage(r);
   if (document.getElementById("homepage-offers")) renderHomeOffers();
@@ -179,7 +201,48 @@ async function syncFirestore() {
   if (document.getElementById("product-detail")) initProductDetail();
 
 }
+// End of syncLocalData
 
+function applyGlobalSettings(settings) {
+  if (!settings) return;
+
+  // 1. Update Logo
+  const logoElement = document.querySelector('.navbar-brand');
+  if (logoElement && settings.logo) {
+    logoElement.innerHTML = `<img src="${settings.logo}" alt="شعار المصري" style="height: 40px; max-width: 150px; object-fit: contain;">`;
+  }
+
+  // 2. Create and show Top Banner
+  if (settings.banner && !document.querySelector('.top-banner')) {
+    const bannerEl = document.createElement('div');
+    bannerEl.className = 'top-banner';
+    bannerEl.textContent = settings.banner;
+    document.body.prepend(bannerEl);
+
+    // --- FINAL FIX: Adjust navbar position and body padding ---
+    // Use a short timeout to ensure the banner has been rendered and has a height.
+    setTimeout(() => {
+      const bannerHeight = bannerEl.offsetHeight;
+      const navbar = document.querySelector('.navbar.fixed-top');
+      if (navbar && bannerHeight > 0) {
+        navbar.style.top = `${bannerHeight}px`;
+        document.body.style.paddingTop = `${bannerHeight + navbar.offsetHeight}px`;
+      }
+    }, 100); // 100ms is usually enough for the browser to render.
+  }
+
+  // 3. Update all WhatsApp links
+  const whatsappNumber = settings.whatsapp || '201011001128'; // Fallback
+  document.querySelectorAll('a[href*="wa.me"]').forEach(link => {
+    if (link.href.includes('?text=')) {
+      const url = new URL(link.href);
+      const text = url.searchParams.get('text');
+      link.href = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(text || '')}`;
+    } else {
+      link.href = `https://wa.me/${whatsappNumber}`;
+    }
+  });
+}
 function getCartCount() {
   return cart.reduce((sum, item) => sum + item.qty, 0);
 }
@@ -378,7 +441,8 @@ function submitOrder() {
     .join("\n")}\nالإجمالي: ${formatPrice(total)}`;
 
   const encoded = encodeURIComponent(message);
-  window.open(`https://wa.me/201011001128?text=${encoded}`, "_blank");
+  const whatsappNumber = settings?.whatsapp || '201011001128';
+  window.open(`https://wa.me/${whatsappNumber}?text=${encoded}`, "_blank");
 
   // Clear cart after submitting
   cart = [];
@@ -599,6 +663,7 @@ async function initProductsPage() {
 
   let currentCategory = "الكل";
   let currentPage = 1;
+  let pageCursors = [null]; // pageCursors[0] is for page 1 (no cursor)
   const perPage = 9;
 
   // Fetch categories dynamically
@@ -643,7 +708,9 @@ async function initProductsPage() {
 
   async function applyFilters(page = 1, direction = 'next') {
     currentPage = page;
-    const cacheKey = `${currentCategory}-${sortSelect?.value || 'default'}-${searchInput?.value || ''}-${page}`;
+    const sortOrder = sortSelect?.value || 'default';
+    const searchTerm = searchInput?.value || '';
+    const cacheKey = `${currentCategory}-${sortOrder}-${searchTerm}-${page}`;
 
     if (productsCache[cacheKey]) {
       renderProductPage(productsCache[cacheKey].items);
@@ -660,15 +727,19 @@ async function initProductsPage() {
     if (currentCategory !== "الكل") {
       q = query(q, where("category", "==", currentCategory));
     }
-    const searchTerm = searchInput?.value.trim();
-    if (searchTerm) {
-      q = query(q, where('name', '>=', searchTerm), where('name', '<=', searchTerm + '\uf8ff'));
+    const searchTermTrimmed = searchTerm.trim();
+    if (searchTermTrimmed) {
+      q = query(
+        q,
+        where('name', '>=', searchTermTrimmed),
+        where('name', '<=', searchTermTrimmed + '\uf8ff')
+      );
     }
 
     // Sorting
-    if (sortSelect?.value === "price") {
+    if (sortOrder === "price") {
       q = query(q, orderBy("price", "asc"));
-    } else if (sortSelect?.value === "rating") {
+    } else if (sortOrder === "rating") {
       q = query(q, orderBy("rating", "desc"));
     } else {
       q = query(q, orderBy("name", "asc")); // Default sort for consistent pagination
@@ -678,6 +749,10 @@ async function initProductsPage() {
     if (page > 1 && lastVisibleDoc && direction === 'next') {
       q = query(q, startAfter(lastVisibleDoc));
     }
+    const cursor = pageCursors[page - 1];
+    if (cursor) {
+      q = query(q, startAfter(cursor));
+    }
     
     q = query(q, limit(perPage));
 
@@ -686,6 +761,9 @@ async function initProductsPage() {
     snap.forEach(doc => pageItems.push(normalizeProduct({ id: doc.id, ...doc.data() })));
 
     lastVisibleDoc = snap.docs[snap.docs.length - 1];
+    if (direction === 'next' && lastVisibleDoc) {
+      pageCursors[page] = lastVisibleDoc;
+    }
 
     productsCache[cacheKey] = { items: pageItems, lastDoc: lastVisibleDoc };
 
@@ -751,6 +829,10 @@ async function initProductsPage() {
         // Note: True 'prev' with startAfter is complex. This is a simplified "go back to page 1"
         // For a real app, you'd need to manage cursors for both directions.
         window.location.reload(); // Simple way to go back
+        if (currentPage > 1) {
+          applyFilters(currentPage - 1, 'prev');
+          smoothScrollToProducts();
+        }
       });
     }
   }
@@ -776,6 +858,7 @@ async function initProductsPage() {
     debounceTimer = setTimeout(() => {
       productsCache = {}; // Invalidate cache on filter change
       lastVisibleDoc = null;
+      pageCursors = [null]; // Reset cursors on filter change
       applyFilters(1);
       smoothScrollToProducts();
       focusTarget?.focus?.({ preventScroll: true });
@@ -858,6 +941,70 @@ async function initProductDetail() {
 function changeMainImage(src) {
   const el = document.getElementById("mainImage");
   if (el) el.src = src;
+}
+
+function initWelcomePopup() {
+  const popupKey = 'welcomePopupShown';
+  if (sessionStorage.getItem(popupKey)) {
+    return;
+  }
+
+  const popupHTML = `
+    <div class="welcome-overlay">
+      <div class="welcome-card">
+        <button class="welcome-close-btn" aria-label="إغلاق" disabled>&times;</button>
+        <img src="assets/الافتتحاية.png" alt="إعلان" class="welcome-image">
+
+      </div>
+    </div>
+  `;
+
+  document.body.insertAdjacentHTML('beforeend', popupHTML);
+  document.body.style.overflow = 'hidden'; // Prevent scrolling
+
+  const overlay = document.querySelector('.welcome-overlay');
+  const closeBtn = document.querySelector('.welcome-close-btn');
+  const enterBtn = document.querySelector('.welcome-enter-btn');
+  const countdownSpan = document.querySelector('.welcome-countdown');
+
+  let countdown = 3;
+
+  const interval = setInterval(() => {
+    countdown--;
+    if (countdownSpan) {
+      countdownSpan.textContent = `(${countdown})`;
+    }
+    if (countdown <= 0) {
+      clearInterval(interval);
+      if (countdownSpan) {
+        countdownSpan.style.display = 'none';
+      }
+      if (closeBtn) {
+        closeBtn.disabled = false;
+      }
+      if (enterBtn) {
+        enterBtn.disabled = false;
+      }
+    }
+  }, 1000);
+
+  function closePopup() {
+    if (overlay) {
+      overlay.classList.add('closing');
+      overlay.addEventListener('animationend', () => {
+        overlay.remove();
+        document.body.style.overflow = ''; // Restore scrolling
+        sessionStorage.setItem(popupKey, 'true');
+      }, { once: true });
+    }
+  }
+
+  if (closeBtn) {
+    closeBtn.addEventListener('click', closePopup);
+  }
+  if (enterBtn) {
+    enterBtn.addEventListener('click', closePopup);
+  }
 }
 
 async function initReviewsPage() {
@@ -1079,6 +1226,9 @@ document.addEventListener("DOMContentLoaded", () => {
   createHiddenAdminButton();
   initFloatingCartButton();
   updateCartBadge(); // Update badge on initial load
+  initWelcomePopup(); // Initialize the welcome popup
+  // NOTE: This file must end with all opened blocks closed.
+
 
   // Always render cart ASAP from localStorage so UI doesn't depend on Firestore.
 
@@ -1097,6 +1247,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
   syncFirestore()
+  syncLocalData()
     .catch((e) => {
       console.warn("Firestore sync failed", e);
     })
@@ -1127,4 +1278,3 @@ document.addEventListener("DOMContentLoaded", () => {
       // If Firestore succeeded, it will have already called initCartPage() in syncFirestore.
     });
 });
-
