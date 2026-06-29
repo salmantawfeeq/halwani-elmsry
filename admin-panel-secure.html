@@ -19,7 +19,20 @@
               <h3 class="mb-4">تسجيل الدخول</h3>
               <form id="admin-login-form">
                 <div class="mb-3"><input id="admin-email" type="email" class="form-control" placeholder="البريد الإلكتروني" autocomplete="email" required /></div>
-                <div class="mb-3"><input id="admin-password" type="password" class="form-control" placeholder="كلمة المرور" autocomplete="current-password" required /></div>
+                <div class="mb-3">
+                  <div class="position-relative">
+                    <input id="admin-password" type="password" class="form-control pe-5" placeholder="كلمة المرور" autocomplete="current-password" required style="text-align: right; direction: rtl;" />
+                    <button
+                      type="button"
+                      id="admin-password-toggle"
+                      class="btn btn-link position-absolute top-50 start-0 translate-middle-y"
+                      style="text-decoration:none;"
+                      aria-label="إظهار/إخفاء كلمة المرور"
+                    >
+                      <i id="admin-password-toggle-icon" class="fa-solid fa-eye-slash"></i>
+                    </button>
+                  </div>
+                </div>
                 <button class="btn btn-primary-custom w-100">دخول</button>
               </form>
             </div>
@@ -193,6 +206,41 @@
     <script src="https://cdn.jsdelivr.net/npm/aos@2.3.4/dist/aos.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script type="module" src="admin.js"></script>
+
+    <script>
+      (function () {
+        const input = document.getElementById('admin-password');
+        const toggleBtn = document.getElementById('admin-password-toggle');
+        const icon = document.getElementById('admin-password-toggle-icon');
+        if (!input || !toggleBtn) return;
+
+        function setIcon(isHidden) {
+          if (!icon) return;
+          icon.classList.toggle('fa-eye-slash', isHidden);
+          icon.classList.toggle('fa-eye', !isHidden);
+        }
+
+        // Ensure initial state
+        setIcon(input.type === 'password');
+
+        toggleBtn.addEventListener('click', () => {
+          const isPassword = input.type === 'password';
+          input.type = isPassword ? 'text' : 'password';
+          // When input is password => hidden => fa-eye-slash
+          setIcon(!isPassword);
+          // keep focus for better UX
+          input.focus();
+        });
+
+        // Keyboard accessibility
+        toggleBtn.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            toggleBtn.click();
+          }
+        });
+      })();
+    </script>
 
   </body>
 </html>
