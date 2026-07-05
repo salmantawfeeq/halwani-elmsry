@@ -160,13 +160,10 @@ function syncFirestore() {
 }
 
 async function syncLocalData() {
-  const [o, s, r] = await Promise.all([
+  const [o, s, r] = await Promise.all([ // We only need to load from Firestore
     loadOffers().catch(() => []),
     loadSettings().catch(() => null),
     loadApprovedReviews().catch(() => []),
-    loadJsonData('db/offers.json').then(data => (data || []).map(normalizeOffer)),
-    loadJsonData('db/settings.json'),
-    loadJsonData('db/reviews.json').then(data => (data || []).filter(review => review.approved)),
   ]);
 
   offers = o;
@@ -233,7 +230,7 @@ function applyGlobalSettings(settings) {
 
   // 3. Update all WhatsApp links
   const whatsappNumber = settings.whatsapp || '201011001128'; // Fallback
-  document.querySelectorAll('a[href*="wa.me"]').forEach(link => {
+  document.querySelectorAll('a[href*="wa.me"]:not(.dev-link)').forEach(link => {
     if (link.href.includes('?text=')) {
       const url = new URL(link.href);
       const text = url.searchParams.get('text');
