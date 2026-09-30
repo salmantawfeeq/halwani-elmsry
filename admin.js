@@ -45,9 +45,7 @@ const OFFERS_COL = 'offers';
 const REVIEWS_COL = 'reviews';
 const SETTINGS_COL = 'settings';
 
-// =========================
 // UI helpers
-// =========================
 function showToast(message, type = 'success') {
   Swal.fire({ title: message, icon: type, timer: 1800, showConfirmButton: false });
 }
@@ -63,9 +61,7 @@ function setPanelVisible(visible) {
   if (loginWrap) loginWrap.style.display = visible ? 'none' : 'block';
 }
 
-// =========================
 // State
-// =========================
 let categories = [];
 let products = [];
 let offers = [];
@@ -74,9 +70,7 @@ let reviews = [];
 // سيتم استبدال هذا لاحقًا بنظام صلاحيات من الباك إند
 let currentUser = null;
 
-// =========================
 // Fetch
-// =========================
 async function fetchAll() {
   // Products/Offers/Reviews are full lists; we filter in render.
   const [p, o, r, s] = await Promise.all([
@@ -125,9 +119,7 @@ async function renderSettings() {
   }
 }
 
-// =========================
 // Render
-// =========================
 function renderDashboard() {
   const statsProducts = document.getElementById('stats-products');
   const statsCategories = document.getElementById('stats-categories');
@@ -254,9 +246,7 @@ function renderReviews() {
     .join('');
 }
 
-// =========================
 // CRUD - Products
-// =========================
 async function addProduct(event) {
   event.preventDefault();
   const form = event.target;
@@ -420,9 +410,7 @@ async function deleteProduct(id) {
   }
 }
 
-// =========================
 // CRUD - Categories (UI only)
-// =========================
 async function deleteCategory(name) {
   categories = categories.filter((c) => c !== name);
   try {
@@ -436,9 +424,7 @@ async function deleteCategory(name) {
   }
 }
 
-// =========================
 // CRUD - Offers
-// =========================
 function editOffer(id) {
   const offer = offers.find((o) => o.id === id);
   if (!offer) return;
@@ -533,9 +519,7 @@ async function deleteOffer(id) {
   }
 }
 
-// =========================
 // Reviews approved workflow
-// =========================
 async function approveReview(id) {
   try {
     await adminUpdateReview(id, { approved: true });
@@ -574,9 +558,7 @@ async function deleteReview(id) {
   }
 }
 
-// =========================
 // Settings
-// =========================
 async function saveSettings(event) {
   event.preventDefault();
   const form = event.target;
@@ -626,9 +608,7 @@ async function saveSettings(event) {
 
 
 
-// =========================
 // Login via Firebase Auth
-// =========================
 function initAdminLogin() {
   const loginForm = document.getElementById('admin-login-form');
   if (!loginForm) return;
@@ -683,9 +663,7 @@ function initAuthGate() {
 }
 
 
-// =========================
 // Pending Orders (still local)
-// =========================
 function loadPendingOrders() {
   try {
     const key = 'almasry-orders-pending';
@@ -782,9 +760,6 @@ async function submitPendingReview() {
     rating: Number(ratingInput?.value || 4.8)
   };
 
-  // Create in Firestore
-  // We don't have adminCreateReview helper; re-use adminCreateProduct?? not.
-  // Use addDoc directly.
   const { addDoc } = await import("https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js");
   await addDoc(collection(db, REVIEWS_COL), payload);
 
@@ -797,9 +772,7 @@ async function submitPendingReview() {
   // Keep pending order data local for now
 }
 
-// =========================
 // File inputs
-// =========================
 function resizeImage(file, maxWidth = 1280, maxHeight = 1280, quality = 0.85) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -849,9 +822,7 @@ function readImageFiles(filesList) {
   );
 }
 
-// =========================
 // Wiring + exports for inline onclick
-// =========================
 window.editProduct = editProduct;
 window.deleteProduct = deleteProduct;
 window.addToCart = undefined;
