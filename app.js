@@ -18,9 +18,7 @@ const OFFERS_COL = "offers";
 const REVIEWS_COL = "reviews";
 const SETTINGS_COL = "settings";
 
-// =========================
 // Runtime state
-// =========================
 let products = [];
 let productsCache = {
   // pageKey: { items: [], lastDoc: doc, firstDoc: doc }
@@ -38,9 +36,7 @@ function formatPrice(value) {
   return `${Number(value || 0).toLocaleString("ar-EG")} ج.م`;
 }
 
-// =========================
 // Helpers
-// =========================
 function normalizeProduct(p) {
   return {
     ...p,
@@ -96,9 +92,7 @@ function getProductById(id) {
   return products.find((product) => String(product.id) === String(id));
 }
 
-// =========================
 // Firestore loading
-// =========================
 async function loadCollectionAsArray(colName) {
   const snap = await getDocs(collection(db, colName));
   const items = [];
@@ -153,7 +147,6 @@ async function loadApprovedReviews() {
   return items;
 }
 
-// syncFirestore was accidentally left unfinished.
 // Keep a stable API: syncFirestore should just run the real sync.
 function syncFirestore() {
   return syncLocalData();
@@ -216,7 +209,6 @@ function applyGlobalSettings(settings) {
     bannerEl.textContent = settings.banner;
     document.body.prepend(bannerEl);
 
-    // --- FINAL FIX: Adjust navbar position and body padding ---
     // Use a short timeout to ensure the banner has been rendered and has a height.
     setTimeout(() => {
       const bannerHeight = bannerEl.offsetHeight;
@@ -289,9 +281,7 @@ function initFloatingCartButton() {
 }
 
 
-// =========================
 // Cart actions
-// =========================
 async function addToCart(productId, qty = 1) {
   const normalizedId = String(productId);
   if (!normalizedId || normalizedId === "undefined" || normalizedId === "null") {
@@ -448,9 +438,7 @@ function submitOrder() {
   initCartPage();
 }
 
-// =========================
 // Render pages
-// =========================
 async function renderFeaturedProducts() {
   const container = document.getElementById("featured-products");
   if (!container) return;
@@ -1188,9 +1176,7 @@ function createHiddenAdminButton() {
   document.body.appendChild(button);
 }
 
-// =========================
 // Start
-// =========================
 window.addEventListener("storage", () => {
   if (
     document.getElementById("cart-items") &&
