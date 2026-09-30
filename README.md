@@ -4,6 +4,12 @@ An Arabic (RTL) e-commerce storefront for an Egyptian sweets and desserts shop: 
 
 **Live demo:** https://salmantawfeeq.github.io/halwani-elmsry/
 
+## Screenshots
+
+![Home page](docs/screenshots/home-page.jpg)
+
+![Admin login](docs/screenshots/admin-login.png)
+
 ## Features
 
 - Product catalog with categories, details pages, ratings and badges
